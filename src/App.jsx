@@ -17,22 +17,24 @@ export default function App() {
   }, [nombreEmpresa]);
 
 async function fetchPedidos() {
-    const empresaLimpia = decodeURIComponent(nombreEmpresa);
-    
-    // Cambiamos .eq por .ilike para que no importe mayúsculas/minúsculas
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*, detalles_pedido(*)') 
-      .ilike('empresa', empresaLimpia) // <--- CAMBIO AQUÍ
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-        console.error("Error al cargar:", error);
-        alert("Error de base de datos: " + error.message); // Agregamos un alert para debug
-    } else {
-        setPedidos(data || []);
-    }
+  // .trim() elimina cualquier espacio accidental al inicio o final de la URL
+  const empresaLimpia = decodeURIComponent(nombreEmpresa).trim();
+  
+  console.log("Buscando empresa exacta:", `"${empresaLimpia}"`); // Esto aparecerá en tu F12
+
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('*, detalles_pedido(*)') 
+    .ilike('empresa', empresaLimpia) 
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error("Error de Supabase:", error);
+  } else {
+    console.log("Resultados encontrados:", data);
+    setPedidos(data || []);
   }
+}
 
   async function confirmarEntrega(id, folio) {
     if (window.confirm(`¿Confirmar entrega del pedido #${folio}?\n\nSe eliminará del sistema.`)) {
