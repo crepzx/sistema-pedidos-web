@@ -1,90 +1,74 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { Routes, Route, useParams } from 'react-router-dom';
 
-// Configuración de Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
-function App() {
+// Este es el componente que muestra los datos
+function PanelPedidos() {
+  const { nombreEmpresa } = useParams(); // Captura "nombre-empresa" de la URL
   const [pedidos, setPedidos] = useState([]);
-  const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
-  const empresaNombre = "NOMBRE_DE_TU_EMPRESA"; // Esto debe coincidir con lo que envías desde C#
+  
+  // Limpiamos el nombre de la URL (convierte %20 en espacios)
+  const empresaLimpia = decodeURIComponent(nombreEmpresa);
 
   useEffect(() => {
-    fetchPedidos();
-  }, []);
+    if (empresaLimpia) {
+      fetchPedidos();
+    }
+  }, [empresaLimpia]);
 
   async function fetchPedidos() {
     const { data, error } = await supabase
       .from('pedidos')
       .select('*')
-      .eq('empresa', empresaNombre)
+      .eq('empresa', empresaLimpia) // Filtra exacto por el nombre en la URL
       .order('created_at', { ascending: false });
     
-    if (error) console.error('Error:', error);
+    if (error) console.error(error);
     else setPedidos(data);
   }
 
-  async function eliminarPedido(id) {
-    const confirmar = window.confirm("¿Confirmar despacho y eliminar pedido?");
-    if (confirmar) {
-      const { error } = await supabase.from('pedidos').delete().eq('id', id);
-      if (!error) fetchPedidos();
-    }
-  }
-
   return (
-    <div className="container" style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Panel de Pedidos: {empresaNombre}</h1>
-      
-      <table border="1" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f4f4f4' }}>
-            <th>Folio</th>
-            <th>Cliente</th>
-            <th>Producto</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pedidos.map((p) => (
-            <tr key={p.id} onClick={() => setPedidoSeleccionado(p)} style={{ cursor: 'pointer' }}>
-              <td>{p.folio}</td>
-              <td>{p.nombre_cliente}</td>
-              <td>{p.producto} (x{p.cantidad})</td>
-              <td>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); eliminarPedido(p.id); }}
-                  style={{ background: '#ff4d4d', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px' }}
-                >
-                  Despachado
-                </button>
-              </td>
+    <div>
+      <h1>Pedidos de: {empresaLimpia}</h1>
+      {pedidos.length === 0 ? (
+        <p>No hay pedidos para esta empresa o revisa el nombre.</p>
+      ) : (
+        <table border="1" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Cliente</th>
+              <th>Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {pedidoSeleccionado && (
-        <div style={{ marginTop: '20px', padding: '20px', border: '2px solid #007bff', borderRadius: '8px', background: '#f9f9f9' }}>
-          <h2>Detalles del Pedido #{pedidoSeleccionado.folio}</h2>
-          <p><strong>Cliente:</strong> {pedidoSeleccionado.nombre_cliente}</p>
-          
-          {/* Solo muestra el RUT si es factura */}
-          {pedidoSeleccionado.es_factura && (
-            <p><strong>RUT:</strong> {pedidoSeleccionado.rut_cliente}</p>
-          )}
-
-          <p><strong>Dirección:</strong> {pedidoSeleccionado.direccion_cliente}</p>
-          <p><strong>Vendedor:</strong> {pedidoSeleccionado.vendedor}</p>
-          <p><strong>Comentario:</strong> {pedidoSeleccionado.comentario}</p>
-          <hr />
-          <p><strong>Total:</strong> ${pedidoSeleccionado.total}</p>
-          <button onClick={() => setPedidoSeleccionado(null)}>Cerrar</button>
-        </div>
+          </thead>
+          <tbody>
+            {pedidos.map(p => (
+              <tr key={p.id}>
+                <td>{p.folio}</td>
+                <td>{p.nombre_cliente}</td>
+                <td>${Number(p.total).toLocaleString('es-CL')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
+  );
+}
+
+// Configuración de las rutas
+function App() {
+  return (
+    <Routes>
+      {/* La ruta dice que después de la barra viene una variable llamada nombreEmpresa */}
+      <Route path="/:nombreEmpresa" element={<PanelPedidos />} />
+      <Route path="/" element={<h2>Por favor, ingresa el nombre de una empresa en la URL.</h2>} />
+    </Routes>
   );
 }
 
