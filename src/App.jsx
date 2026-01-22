@@ -38,7 +38,7 @@ function ContenedorPedidos() {
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
       .ilike('empresa', empresaLimpia) // Búsqueda flexible (ignora mayúsculas)
-      .order('created_at', { ascending: false });
+      .order('fecha', { ascending: false });
 
     if (error) {
       console.error("Error de Supabase:", error.message);
