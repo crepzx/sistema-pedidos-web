@@ -13,6 +13,18 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hace que la barra de scroll sea más delgada y discreta */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
 a {
   font-weight: 500;
   color: #646cff;
