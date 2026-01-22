@@ -36,7 +36,7 @@ function ContenedorPedidos() {
     // Consulta relacional: Trae el pedido y todos sus productos asociados
     const { data, error } = await supabase
       .from('pedidos')
-      .select('*, detalles_pedido(*)') 
+      .select('*, detalles_pedido!pedido_id(*)') 
       .ilike('empresa', empresaLimpia) // Búsqueda flexible (ignora mayúsculas)
       .order('created_at', { ascending: false });
 
