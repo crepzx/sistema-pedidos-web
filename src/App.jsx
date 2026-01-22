@@ -7,7 +7,7 @@ import {
   Search, AlertCircle 
 } from 'lucide-react';
 
-// Configuración de conexión con Supabase
+// Inicialización del cliente de Supabase
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL, 
   import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -30,12 +30,12 @@ function ContenedorPedidos() {
     setCargando(true);
     const empresaLimpia = decodeURIComponent(nombreEmpresa).trim();
     
-    // Consulta relacional explícita para evitar ambigüedad en la base de datos
+    // Consulta relacional explícita para evitar errores de ambigüedad
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
       .ilike('empresa', empresaLimpia)
-      .order('fecha', { ascending: false }); // Ordenado por el nombre real de tu columna
+      .order('fecha', { ascending: false }); // Ordenado por columna 'fecha' según tu DB
 
     if (error) {
       console.error("Error de Supabase:", error.message);
@@ -69,98 +69,110 @@ function ContenedorPedidos() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
-      <header className="max-w-2xl mx-auto mb-8">
-        <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-          <Package className="text-blue-600" size={32} /> Rutas de Entrega
+    <div className="min-h-screen bg-slate-50 p-2 sm:p-4 md:p-8 font-sans text-slate-900">
+      <header className="w-full max-w-md mx-auto mb-6 px-2">
+        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+          <Package className="text-blue-600 shrink-0" size={28} /> Rutas de Entrega
         </h1>
-        <p className="text-slate-500 font-medium italic mt-1">
+        <p className="text-slate-500 text-xs font-bold italic mt-1 break-words">
           {decodeURIComponent(nombreEmpresa)}
         </p>
       </header>
 
-      <main className="max-w-2xl mx-auto space-y-4 pb-12">
+      <main className="w-full max-w-md mx-auto space-y-4 pb-12 px-2">
         {pedidos.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
-            <Search size={48} className="mx-auto mb-4 text-slate-300" />
+          <div className="bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200">
+            <Search size={40} className="mx-auto mb-4 text-slate-300" />
             <h3 className="text-lg font-bold text-slate-700">Sin pedidos pendientes</h3>
           </div>
         ) : (
           pedidos.map((p) => (
-            <div key={p.id} className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+            <div key={p.id} className="w-full bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
               
-              {/* CABECERA: Resumen visible del pedido */}
-              <div className="p-5 cursor-pointer" onClick={() => setExpandido(expandido === p.id ? null : p.id)}>
-                <div className="flex justify-between items-start mb-3">
-                  <span className="bg-blue-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full italic">#{p.folio}</span>
-                  <span className="text-slate-400 text-xs font-bold flex items-center gap-1">
-                    <Clock size={14}/> {p.hora_entrega || '--:--'}
+              {/* CABECERA DE LA TARJETA */}
+              <div className="p-4 cursor-pointer w-full" onClick={() => setExpandido(expandido === p.id ? null : p.id)}>
+                <div className="flex justify-between items-center mb-2 gap-2">
+                  <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full italic shrink-0">
+                    #{p.folio}
+                  </span>
+                  <span className="text-slate-400 text-[10px] font-bold flex items-center gap-1 shrink-0">
+                    <Clock size={12}/> {p.hora_entrega || '--:--'}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-1 leading-tight">{p.nombre_cliente}</h2>
-                <div className="flex items-start gap-1.5 text-slate-500 mb-3">
-                  <MapPin size={18} className="text-red-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm font-medium leading-tight">{p.direccion_cliente}</p>
-                </div>
                 
-                {/* Resumen compacto de productos */}
-                <div className="flex items-center gap-2 text-blue-600 text-xs font-bold mb-4">
+                <h2 className="text-lg font-bold text-slate-800 mb-1 leading-tight break-words">
+                  {p.nombre_cliente}
+                </h2>
+                
+                <div className="flex items-start gap-1.5 text-slate-500 mb-3">
+                  <MapPin size={16} className="text-red-500 mt-1 shrink-0" />
+                  <p className="text-xs font-medium leading-tight break-words">
+                    {p.direccion_cliente}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 text-blue-600 text-[10px] font-black uppercase mb-4">
                   <Package size={14} />
                   <span>{p.detalles_pedido?.length || 0} productos distintos</span>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                  <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                  <div className="bg-slate-100 p-2 rounded-full text-slate-400">
-                    {expandido === p.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                <div className="pt-4 border-t border-slate-100 flex justify-between items-center w-full">
+                  <span className="text-xl font-black text-emerald-600 shrink-0">
+                    ${Number(p.total_pedido).toLocaleString('es-CL')}
+                  </span>
+                  <div className="bg-slate-100 p-1.5 rounded-full text-slate-400">
+                    {expandido === p.id ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
                   </div>
                 </div>
               </div>
 
-              {/* DETALLE: Lista de productos con scroll para ahorrar espacio */}
+              {/* DETALLE EXPANDIDO */}
               {expandido === p.id && (
-                <div className="bg-slate-50 p-5 border-t border-slate-100">
-                  <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest text-center">Detalle de Carga</h4>
+                <div className="bg-slate-50 p-4 border-t border-slate-100 w-full overflow-hidden">
+                  <h4 className="text-[9px] font-black uppercase text-slate-400 mb-3 tracking-widest text-center">Detalle de Carga</h4>
                   
-                  <div className="space-y-2 mb-6 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                  {/* Lista de productos con Scroll interno */}
+                  <div className="space-y-2 mb-6 max-h-52 overflow-y-auto w-full pr-1 custom-scrollbar">
                     {p.detalles_pedido?.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="flex-1 pr-4">
-                          <p className="font-bold text-slate-800 text-sm truncate">{item.descripcion}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">
+                      <div key={index} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm w-full gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-800 text-xs truncate">{item.descripcion}</p>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase truncate">
                             {item.cantidad} {item.unidad_medida} × ${Number(item.precio_unitario).toLocaleString('es-CL')}
                           </p>
                         </div>
-                        <p className="font-black text-slate-700 text-sm">${Number(item.subtotal).toLocaleString('es-CL')}</p>
+                        <p className="font-black text-slate-700 text-xs shrink-0">
+                          ${Number(item.subtotal).toLocaleString('es-CL')}
+                        </p>
                       </div>
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="grid grid-cols-2 gap-2 mb-6">
                     <InfoBox label="Vendedor" value={p.vendedor} />
                     <InfoBox label="Entrega" value={p.fecha_entrega} />
-                    <div className="col-span-2 bg-white p-3 rounded-xl border border-slate-200 flex items-center gap-3">
-                      <UserCheck size={18} className="text-blue-500"/>
-                      <div>
-                        <p className="text-[10px] uppercase font-black text-slate-400">Recibe:</p>
-                        <p className="text-sm font-bold text-slate-700">{p.quien_recibe || 'Encargado'}</p>
+                    <div className="col-span-2 bg-white p-2.5 rounded-xl border border-slate-200 flex items-center gap-3">
+                      <UserCheck size={16} className="text-blue-500 shrink-0"/>
+                      <div className="min-w-0">
+                        <p className="text-[9px] uppercase font-black text-slate-400">Recibe:</p>
+                        <p className="text-xs font-bold text-slate-700 truncate">{p.quien_recibe || 'Encargado'}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2 w-full">
                     <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=$${encodeURIComponent(p.direccion_cliente)}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion_cliente)}`}
                       target="_blank" rel="noreferrer"
-                      className="bg-slate-800 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 active:scale-95 transition shadow-lg"
+                      className="w-full bg-slate-800 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition shadow-lg"
                     >
-                      <Navigation size={20}/> Iniciar GPS
+                      <Navigation size={18}/> Iniciar GPS
                     </a>
                     <button 
                       onClick={() => confirmarEntrega(p.id, p.folio)}
-                      className="bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 active:scale-95 transition shadow-lg"
+                      className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition shadow-lg"
                     >
-                      <CheckCircle size={20}/> Confirmar Entrega
+                      <CheckCircle size={18}/> Confirmar Entrega
                     </button>
                   </div>
                 </div>
@@ -180,11 +192,11 @@ export default function App() {
       <Route path="/:nombreEmpresa" element={<ContenedorPedidos />} />
       <Route path="/" element={
         <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6 text-center font-sans">
-          <div className="bg-white p-10 rounded-3xl shadow-xl max-w-sm border border-slate-200">
-            <AlertCircle size={48} className="mx-auto text-amber-500 mb-4" />
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Acceso Requerido</h2>
-            <p className="text-slate-600 text-sm leading-relaxed">
-              Ingresa el nombre de la empresa en la URL para visualizar tus pedidos de delivery.
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-xs border border-slate-200">
+            <AlertCircle size={40} className="mx-auto text-amber-500 mb-4" />
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Acceso Requerido</h2>
+            <p className="text-slate-600 text-xs leading-relaxed">
+              Ingresa el nombre de la empresa en la URL para visualizar tus pedidos.
             </p>
           </div>
         </div>
@@ -195,9 +207,9 @@ export default function App() {
 
 function InfoBox({ label, value }) {
   return (
-    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-      <p className="text-[10px] uppercase font-black text-slate-400 mb-0.5 tracking-wider">{label}</p>
-      <p className="text-xs font-bold text-slate-700">{value || '---'}</p>
+    <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm min-w-0">
+      <p className="text-[8px] uppercase font-black text-slate-400 mb-0.5 truncate tracking-tighter">{label}</p>
+      <p className="text-[10px] font-bold text-slate-700 truncate">{value || '---'}</p>
     </div>
   );
 }
