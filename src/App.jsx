@@ -232,9 +232,14 @@ function ContenedorPedidos() {
                     </div>
 
                     <div className="flex flex-col gap-4 w-full">
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.direccion)}`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition">
-                        <Navigation size={26}/> Iniciar GPS
-                      </a>
+                      <a 
+  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`}
+  target="_blank" 
+  rel="noreferrer"
+  className="bg-slate-800 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl hover:bg-slate-900 transition uppercase tracking-widest text-sm"
+>
+  <Navigation size={22}/> Ir al Destino
+</a>
                       
                       {cliente.pedidos.length > 1 && (
                         <button onClick={() => confirmarTodoElCliente(cliente.pedidos)} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-emerald-700 transition">
