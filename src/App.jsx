@@ -4,7 +4,7 @@ import { Routes, Route, useParams } from 'react-router-dom';
 import { 
   MapPin, Clock, Navigation, CheckCircle, 
   ChevronDown, ChevronUp, Package, UserCheck, 
-  Search, AlertCircle, Phone, FileText, XCircle, Calendar,
+  Search, AlertCircle, Phone, XCircle, Calendar,
   CheckCircle2, Info
 } from 'lucide-react';
 
@@ -13,7 +13,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// --- COMPONENTE MODAL DE ALTO IMPACTO ---
+// --- MODAL DE CONFIRMACIÓN ---
 const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'confirm' }) => {
   if (!isOpen) return null;
   return (
@@ -60,6 +60,7 @@ function ContenedorPedidos() {
     setCargando(true);
     const empresaLimpia = decodeURIComponent(nombreEmpresa).trim();
     
+    // Consulta Master-Detail para el proyecto de Analista Programador
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
@@ -91,8 +92,8 @@ function ContenedorPedidos() {
 
   async function confirmarEntregaFolio(id, folio) {
     abrirModal(
-      "Confirmar Folio",
-      `¿Deseas marcar como entregado el folio #${folio}?`,
+      "Entregar Folio",
+      `¿Confirmar la entrega del folio #${folio}?`,
       async () => {
         const { error } = await supabase.from('pedidos').delete().eq('id', id);
         if (!error) {
@@ -107,7 +108,7 @@ function ContenedorPedidos() {
     const ids = pedidosCliente.map(p => p.id);
     abrirModal(
       "Entrega Total",
-      `Se confirmarán ${ids.length} pedidos de forma simultánea. ¿Continuar?`,
+      `¿Confirmar los ${ids.length} pedidos de este cliente?`,
       async () => {
         const { error } = await supabase.from('pedidos').delete().in('id', ids);
         if (!error) {
@@ -121,27 +122,27 @@ function ContenedorPedidos() {
 
   const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
 
-  if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600 animate-pulse">SINCRONIZANDO RUTA...</div>;
+  if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600">SINCRONIZANDO RUTA...</div>;
 
   return (
     <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
       <CustomModal {...modal} onCancel={() => setModal({ ...modal, isOpen: false })} />
 
-      <div className="w-full px-4 py-6 md:px-10 lg:px-16"> 
+      <div className="w-full px-2 py-6 sm:px-4 md:px-10"> 
         <header className="w-full mb-8 border-b-2 border-slate-200 pb-6">
           <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-            <Package className="text-indigo-600 shrink-0" size={32} /> Hoja de Ruta
+            <Package className="text-indigo-600" size={32} /> Hoja de Ruta
           </h1>
-          <p className="text-slate-500 font-bold italic text-sm truncate">{decodeURIComponent(nombreEmpresa)}</p>
+          <p className="text-slate-500 font-bold italic text-sm">{decodeURIComponent(nombreEmpresa)}</p>
         </header>
 
         <main className="w-full space-y-6 pb-20">
           {clientesAgrupados.map((cliente) => {
             const estaAbierto = expandido === cliente.idUnico;
             return (
-              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
+              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl transition-all border-4 ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 
-                {/* CABECERA DINÁMICA: OCUPA TODO EL ANCHO DISPONIBLE */}
+                {/* CABECERA PADRE: Ocupa el 100% sin márgenes laterales internos excesivos */}
                 <div 
                   className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900"
                   onClick={() => setExpandido(estaAbierto ? null : cliente.idUnico)}
@@ -151,7 +152,7 @@ function ContenedorPedidos() {
                       Punto de Entrega
                     </span>
                     {esTelefonoValido(cliente.telefono) && (
-                      <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:scale-110 transition">
+                      <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg">
                         <Phone size={20} />
                       </a>
                     )}
@@ -164,16 +165,16 @@ function ContenedorPedidos() {
                     <p className="text-base md:text-lg font-bold leading-tight break-words">{cliente.direccion}</p>
                   </div>
 
-                  <div className="flex justify-between items-end pt-6 border-t border-slate-100 gap-4">
+                  <div className="flex justify-between items-end pt-6 border-t border-slate-100">
                     <div className="flex-1">
                       {estaAbierto ? (
                         <div className="animate-in fade-in slide-in-from-left-2">
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Saldo Total a Cobrar</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total de la Carga</p>
                           <p className="text-4xl font-black text-emerald-600">${cliente.totalGeneral.toLocaleString('es-CL')}</p>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Documentos Pendientes</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cantidad de Pedidos</p>
                           <p className="text-4xl font-black text-slate-800">{cliente.pedidos.length}</p>
                         </div>
                       )}
@@ -184,24 +185,25 @@ function ContenedorPedidos() {
                   </div>
                 </div>
 
-                {/* DETALLE EXPANDIDO: DISEÑO GRILLE SIN RESTRICCIÓN DE ANCHO */}
+                {/* DETALLE HIJO: Ocupa el 100% del contenedor padre */}
                 {estaAbierto && (
                   <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
                         return (
-                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition">
+                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
+                            {/* CABECERA HIJA: Solo color (Naranja=Factura, Azul=Boleta) para ahorrar espacio */}
                             <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}>
-                              <span className="text-xs font-black tracking-widest uppercase">{esFactura ? 'Factura' : 'Boleta'} #{p.folio}</span>
-                              <div className="flex gap-2 text-[10px] font-bold opacity-80">
+                              <span className="text-xs font-black tracking-widest uppercase"># {p.folio}</span>
+                              <div className="flex gap-2 text-[10px] font-bold">
                                 <span className="flex items-center gap-1"><Calendar size={12}/> {p.fecha_entrega}</span>
                                 <span className="flex items-center gap-1"><Clock size={12}/> {p.hora_entrega}</span>
                               </div>
                             </div>
 
                             <div className="p-6 flex-1">
-                              {esFactura && <div className="mb-4 text-orange-600 font-black text-xs border-b pb-2 italic">RUT: {p.rut_cliente}</div>}
+                              {esFactura && <div className="mb-4 text-orange-600 font-black text-xs border-b pb-2 italic uppercase">RUT: {p.rut_cliente}</div>}
                               <div className="space-y-2 mb-4">
                                 {p.detalles_pedido?.map((det, idx) => (
                                   <div key={idx} className="flex justify-between text-sm text-slate-600 border-b border-slate-50 pb-1">
@@ -220,7 +222,7 @@ function ContenedorPedidos() {
 
                             <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
                               <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                              <button onClick={() => confirmarEntregaFolio(p.id, p.folio)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:bg-emerald-600 transition active:scale-95">
+                              <button onClick={() => confirmarEntregaFolio(p.id, p.folio)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 transition">
                                 <CheckCircle size={24}/>
                               </button>
                             </div>
@@ -229,10 +231,9 @@ function ContenedorPedidos() {
                       })}
                     </div>
 
-                    {/* SECCIÓN DE ACCIONES: ADAPTADAS AL ANCHO TOTAL */}
                     <div className="flex flex-col gap-4 w-full">
                       <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.direccion)}`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition">
-                        <Navigation size={26}/> Abrir en GPS
+                        <Navigation size={26}/> Iniciar GPS
                       </a>
                       
                       {cliente.pedidos.length > 1 && (
@@ -260,7 +261,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/:nombreEmpresa" element={<ContenedorPedidos />} />
-      <Route path="/" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl">DELIVERY POS</div>} />
+      <Route path="/" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl">DELIVERY</div>} />
     </Routes>
   );
 }
