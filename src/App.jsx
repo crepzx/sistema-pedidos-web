@@ -13,7 +13,7 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// --- COMPONENTE MODAL PERSONALIZADO ---
+// --- COMPONENTE MODAL DE ALTO IMPACTO ---
 const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'confirm' }) => {
   if (!isOpen) return null;
   return (
@@ -33,7 +33,7 @@ const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'conf
             </button>
           )}
           <button onClick={onConfirm} className={`flex-1 py-3 font-bold text-white rounded-2xl shadow-lg transition active:scale-95 ${type === 'confirm' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-            Entendido
+            Confirmar
           </button>
         </div>
       </div>
@@ -46,8 +46,6 @@ function ContenedorPedidos() {
   const [clientesAgrupados, setClientesAgrupados] = useState([]);
   const [expandido, setExpandido] = useState(null);
   const [cargando, setCargando] = useState(true);
-  
-  // Estado para el Modal
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'confirm' });
 
   useEffect(() => {
@@ -61,6 +59,7 @@ function ContenedorPedidos() {
   async function fetchPedidos() {
     setCargando(true);
     const empresaLimpia = decodeURIComponent(nombreEmpresa).trim();
+    
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
@@ -108,7 +107,7 @@ function ContenedorPedidos() {
     const ids = pedidosCliente.map(p => p.id);
     abrirModal(
       "Entrega Total",
-      `Se confirmarán ${ids.length} pedidos para este cliente. ¿Continuar?`,
+      `Se confirmarán ${ids.length} pedidos de forma simultánea. ¿Continuar?`,
       async () => {
         const { error } = await supabase.from('pedidos').delete().in('id', ids);
         if (!error) {
@@ -122,42 +121,37 @@ function ContenedorPedidos() {
 
   const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
 
-  if (cargando) return <div className="flex h-screen items-center justify-center font-black animate-pulse text-indigo-600">CARGANDO RUTA...</div>;
+  if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600 animate-pulse">SINCRONIZANDO RUTA...</div>;
 
   return (
-    <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900">
-      <CustomModal 
-        {...modal} 
-        onCancel={() => setModal({ ...modal, isOpen: false })} 
-      />
+    <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
+      <CustomModal {...modal} onCancel={() => setModal({ ...modal, isOpen: false })} />
 
-      <div className="w-full px-4 py-6 md:px-10"> 
-        <header className="w-full mb-8 border-b-2 border-slate-200 pb-6 flex justify-between items-center">
-          <div className="w-full">
-            <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-              <Package className="text-indigo-600 shrink-0" size={32} /> Hoja de Ruta Full
-            </h1>
-            <p className="text-slate-500 font-bold italic text-sm truncate">{decodeURIComponent(nombreEmpresa)}</p>
-          </div>
+      <div className="w-full px-4 py-6 md:px-10 lg:px-16"> 
+        <header className="w-full mb-8 border-b-2 border-slate-200 pb-6">
+          <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
+            <Package className="text-indigo-600 shrink-0" size={32} /> Hoja de Ruta
+          </h1>
+          <p className="text-slate-500 font-bold italic text-sm truncate">{decodeURIComponent(nombreEmpresa)}</p>
         </header>
 
         <main className="w-full space-y-6 pb-20">
           {clientesAgrupados.map((cliente) => {
             const estaAbierto = expandido === cliente.idUnico;
             return (
-              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl transition-all overflow-hidden border-4 ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
+              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 
-                {/* CABECERA: 100% ANCHO */}
+                {/* CABECERA DINÁMICA: OCUPA TODO EL ANCHO DISPONIBLE */}
                 <div 
                   className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900"
                   onClick={() => setExpandido(estaAbierto ? null : cliente.idUnico)}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">
-                      Punto Logístico
+                      Punto de Entrega
                     </span>
                     {esTelefonoValido(cliente.telefono) && (
-                      <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg">
+                      <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:scale-110 transition">
                         <Phone size={20} />
                       </a>
                     )}
@@ -170,16 +164,16 @@ function ContenedorPedidos() {
                     <p className="text-base md:text-lg font-bold leading-tight break-words">{cliente.direccion}</p>
                   </div>
 
-                  <div className="flex justify-between items-end pt-6 border-t border-slate-100">
+                  <div className="flex justify-between items-end pt-6 border-t border-slate-100 gap-4">
                     <div className="flex-1">
                       {estaAbierto ? (
                         <div className="animate-in fade-in slide-in-from-left-2">
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total Acumulado</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Saldo Total a Cobrar</p>
                           <p className="text-4xl font-black text-emerald-600">${cliente.totalGeneral.toLocaleString('es-CL')}</p>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Pedidos Pendientes</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Documentos Pendientes</p>
                           <p className="text-4xl font-black text-slate-800">{cliente.pedidos.length}</p>
                         </div>
                       )}
@@ -190,17 +184,17 @@ function ContenedorPedidos() {
                   </div>
                 </div>
 
-                {/* DETALLE EXPANDIDO: 100% ANCHO */}
+                {/* DETALLE EXPANDIDO: DISEÑO GRILLE SIN RESTRICCIÓN DE ANCHO */}
                 {estaAbierto && (
                   <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
                         return (
-                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
+                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition">
                             <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}>
                               <span className="text-xs font-black tracking-widest uppercase">{esFactura ? 'Factura' : 'Boleta'} #{p.folio}</span>
-                              <div className="flex gap-2 text-[10px] font-bold">
+                              <div className="flex gap-2 text-[10px] font-bold opacity-80">
                                 <span className="flex items-center gap-1"><Calendar size={12}/> {p.fecha_entrega}</span>
                                 <span className="flex items-center gap-1"><Clock size={12}/> {p.hora_entrega}</span>
                               </div>
@@ -210,23 +204,23 @@ function ContenedorPedidos() {
                               {esFactura && <div className="mb-4 text-orange-600 font-black text-xs border-b pb-2 italic">RUT: {p.rut_cliente}</div>}
                               <div className="space-y-2 mb-4">
                                 {p.detalles_pedido?.map((det, idx) => (
-                                  <div key={idx} className="flex justify-between text-sm text-slate-600">
+                                  <div key={idx} className="flex justify-between text-sm text-slate-600 border-b border-slate-50 pb-1">
                                     <span className="font-bold uppercase truncate pr-4">{det.descripcion}</span>
                                     <span className="font-black shrink-0">x{det.cantidad}</span>
                                   </div>
                                 ))}
                               </div>
-                              {p.quien_recibe && (
+                              {p.quien_recibe && p.quien_recibe.trim().length > 0 && (
                                 <div className="mt-4 flex items-center gap-2 text-indigo-600 bg-indigo-50 p-3 rounded-2xl">
                                     <UserCheck size={18} />
-                                    <p className="text-xs font-black uppercase italic">Recibe: {p.quien_recibe}</p>
+                                    <p className="text-xs font-black uppercase italic truncate">Recibe: {p.quien_recibe}</p>
                                 </div>
                               )}
                             </div>
 
                             <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
                               <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                              <button onClick={() => confirmarEntregaFolio(p.id, p.folio)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl hover:scale-105 transition">
+                              <button onClick={() => confirmarEntregaFolio(p.id, p.folio)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:bg-emerald-600 transition active:scale-95">
                                 <CheckCircle size={24}/>
                               </button>
                             </div>
@@ -235,19 +229,19 @@ function ContenedorPedidos() {
                       })}
                     </div>
 
+                    {/* SECCIÓN DE ACCIONES: ADAPTADAS AL ANCHO TOTAL */}
                     <div className="flex flex-col gap-4 w-full">
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.direccion)}`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg">
-                        <Navigation size={26}/> Iniciar Navegación
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cliente.direccion)}`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition">
+                        <Navigation size={26}/> Abrir en GPS
                       </a>
                       
-                      {/* LÓGICA: Mostrar solo si hay más de 1 pedido */}
                       {cliente.pedidos.length > 1 && (
-                        <button onClick={() => confirmarTodoElCliente(cliente.pedidos)} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg">
-                          <CheckCircle size={26}/> Confirmar Entrega Total
+                        <button onClick={() => confirmarTodoElCliente(cliente.pedidos)} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-emerald-700 transition">
+                          <CheckCircle size={26}/> Confirmar Todo
                         </button>
                       )}
 
-                      <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
+                      <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs hover:bg-slate-300 transition">
                         <XCircle size={20}/> Cerrar Detalles
                       </button>
                     </div>
@@ -266,7 +260,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/:nombreEmpresa" element={<ContenedorPedidos />} />
-      <Route path="/" element={<div className="h-screen flex items-center justify-center font-black text-slate-300 text-5xl">POS DELIVERY</div>} />
+      <Route path="/" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl">DELIVERY POS</div>} />
     </Routes>
   );
 }
