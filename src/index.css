@@ -36,10 +36,11 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  padding: 0;
+  width: 100%;
   min-height: 100vh;
+  display: block; /* Cambia flex por block para que el contenido fluya hacia abajo */
+  background-color: #f1f5f9; /* Color gris claro de fondo (slate-100) */
 }
 
 h1 {
