@@ -327,17 +327,18 @@ if (fotoPreview) {
 
                     {/* MAPA EMBEBIDO (Iframe) */}
                     {mapaActivo && (
-                      <div className="w-full h-80 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl animate-in zoom-in-95">
-                        <iframe
-                          width="100%"
-                          height="100%"
-                          frameBorder="0"
-                          style={{ border: 0 }}
-                          src={`https://www.google.com/maps/embed/v1/place?key=TU_API_KEY&q=${encodeURIComponent(cliente.direccion)}`}
-                          allowFullScreen
-                        ></iframe>
-                      </div>
-                    )}
+  <div className="w-full h-80 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl animate-in zoom-in-95">
+    <iframe
+      width="100%"
+      height="100%"
+      frameBorder="0"
+      style={{ border: 0 }}
+      /* Usamos la URL de búsqueda con output=embed */
+      src={`https://maps.google.com/maps?q=${encodeURIComponent(cliente.direccion)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+      allowFullScreen
+    ></iframe>
+  </div>
+)}
 
                     {/* GRID DE PEDIDOS (HIJOS) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
