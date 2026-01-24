@@ -4,9 +4,8 @@ import { Routes, Route } from 'react-router-dom';
 import { 
   MapPin, Clock, Navigation, CheckCircle, 
   ChevronDown, ChevronUp, Package, UserCheck, 
-  Search, AlertCircle, Phone, XCircle, Calendar,
-  Camera, ArrowLeft, Image as ImageIcon, Globe, 
-  CheckCircle2, Info, RotateCcw, Maximize2, Minimize2
+  Phone, XCircle, Calendar, Camera, RotateCcw, 
+  Maximize2, Minimize2, Navigation2
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -23,7 +22,7 @@ const formatearFechaChile = (fechaStr) => {
 function ContenedorPedidos() {
   const [clientesAgrupados, setClientesAgrupados] = useState([]);
   const [expandido, setExpandido] = useState(null);
-  const [verMapa, setVerMapa] = useState(null); // ID del cliente activo en mapa
+  const [verMapa, setVerMapa] = useState(null); 
   const [posicionActual, setPosicionActual] = useState(null);
   const [mapaFullscreen, setMapaFullscreen] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -33,11 +32,10 @@ function ContenedorPedidos() {
   const [subiendo, setSubiendo] = useState(false);
   
   const fileInputRef = useRef(null);
-  const watchId = useRef(null); // Referencia para el seguimiento GPS
+  const watchId = useRef(null);
 
   useEffect(() => {
     fetchPedidos();
-    // Limpiar el seguimiento GPS al desmontar el componente
     return () => { if (watchId.current) navigator.geolocation.clearWatch(watchId.current); };
   }, []);
 
@@ -74,28 +72,25 @@ function ContenedorPedidos() {
     setCargando(false);
   }
 
-  // --- GPS EN TIEMPO REAL (WATCH POSITION) ---
-  const iniciarSeguimientoGPS = (clienteId) => {
-    if (!navigator.geolocation) return alert("Tu dispositivo no soporta GPS.");
+  // --- NAVEGACIÓN FULLSCREEN AUTOMÁTICA ---
+  const iniciarNavegacionAmplia = (clienteId) => {
+    if (!navigator.geolocation) return alert("GPS no disponible");
 
-    // Si ya hay un seguimiento activo, lo limpiamos para empezar uno nuevo
     if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
 
     setVerMapa(clienteId);
+    setMapaFullscreen(true); // Abrir pantalla completa de inmediato
 
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         setPosicionActual({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      (err) => {
-        console.error("Error GPS:", err);
-        alert("Asegúrate de tener el GPS activo y haber dado permisos.");
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      (err) => alert("Error al obtener GPS. Activa la ubicación."),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  const detenerGPS = () => {
+  const detenerNavegacion = () => {
     if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
     setVerMapa(null);
     setMapaFullscreen(false);
@@ -134,41 +129,45 @@ function ContenedorPedidos() {
       setFotoPreview(null);
       setPedidoEnProceso(null);
       fetchPedidos();
-    } catch (e) { alert("Error al subir evidencia."); }
+    } catch (e) { alert("Error al procesar la entrega."); }
     setSubiendo(false);
   };
 
-  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl">CARGANDO...</div>;
+  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl">CONECTANDO...</div>;
 
-  // --- MODO PANTALLA COMPLETA DEL MAPA ---
+  // --- MODO NAVEGACIÓN GPS FULLSCREEN (SIN BORDES) ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
     return (
-      <div className="fixed inset-0 z-[500] bg-black flex flex-col">
-        {/* Controles flotantes sobre el mapa */}
-        <div className="absolute top-4 left-4 right-4 z-[510] flex justify-between items-center">
-          <div className="bg-white/90 backdrop-blur px-4 py-2 rounded-2xl shadow-xl border border-slate-200 max-w-[70%]">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino Actual</p>
-            <p className="text-sm font-bold text-slate-800 truncate">{clienteActivo?.direccion}</p>
-          </div>
-          <button 
-            onClick={() => setMapaFullscreen(false)}
-            className="bg-white p-3 rounded-2xl shadow-xl text-slate-800 active:scale-90 transition"
-          >
-            <Minimize2 size={24} />
+      <div className="fixed inset-0 z-[500] bg-black flex flex-col animate-in fade-in duration-300">
+        {/* Header Flotante Minimalista */}
+        <div className="absolute top-6 left-4 right-4 z-[510] flex gap-3 items-center">
+          <button onClick={detenerNavegacion} className="bg-white/95 p-4 rounded-2xl shadow-2xl text-red-500 active:scale-90 transition">
+            <XCircle size={24} />
           </button>
+          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-200">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Navegando hacia</p>
+            <p className="text-sm font-black text-slate-800 truncate">{clienteActivo?.nombre}</p>
+          </div>
         </div>
 
+        {/* Mapa Limpio (Roadmap, Zoom 18, Sin controles de UI adicionales) */}
         <iframe 
           className="flex-1 w-full h-full"
           frameBorder="0" 
-          src={`https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&t=m&z=17&output=embed`} 
+          /* Parámetros: iwloc=near (limpia globos), t=m (roadmap), z=18 (zoom centrado) */
+          src={`https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&t=m&z=18&output=embed&iwloc=near&disableDefaultUI=true`} 
           allowFullScreen
         ></iframe>
 
-        <div className="p-4 bg-white border-t flex gap-4">
-           <button onClick={detenerGPS} className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase text-xs">Cerrar Navegación</button>
-           <button onClick={() => setMapaFullscreen(false)} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-xs">Volver a Pedidos</button>
+        {/* Barra de acción inferior */}
+        <div className="absolute bottom-8 left-6 right-6 z-[510]">
+          <button 
+            onClick={() => setMapaFullscreen(false)} 
+            className="w-full bg-indigo-600 text-white py-5 rounded-[2rem] font-black uppercase text-sm shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition"
+          >
+            <Minimize2 size={20} /> Volver a Pedidos
+          </button>
         </div>
       </div>
     );
@@ -180,16 +179,16 @@ function ContenedorPedidos() {
       <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2">
         <div className="w-full max-w-sm bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
           <div className="p-4 border-b flex items-center justify-between">
-            <div className="flex items-center gap-2 text-indigo-600"><Camera size={18} /><span className="font-black text-[10px] uppercase">Validar</span></div>
+            <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase"><Camera size={18} /> Validar</div>
             <XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} />
           </div>
-          <div className="bg-black flex-shrink-0 h-[25vh] flex items-center justify-center"><img src={fotoPreview} className="h-full w-full object-cover" /></div>
-          <div className="p-5 flex-1 flex flex-col justify-between">
-            <h4 className="text-lg font-black text-slate-800 text-center mb-4 uppercase italic">Folio #{pedidoEnProceso?.folio}</h4>
-            <div className="flex flex-col gap-2">
-              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
+          <div className="bg-black flex-shrink-0 h-[25vh] flex items-center justify-center"><img src={fotoPreview} className="h-full w-full object-cover shadow-inner" /></div>
+          <div className="p-6 flex-1 flex flex-col justify-between">
+            <h4 className="text-xl font-black text-slate-800 text-center mb-6 italic">Folio #{pedidoEnProceso?.folio}</h4>
+            <div className="flex flex-col gap-3">
+              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Sincronizando..." : "Confirmar Entrega"}</button>
               <button onClick={() => { setFotoPreview(null); setTimeout(() => fileInputRef.current.click(), 150); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase italic">Repetir Foto</button>
-              <button onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase italic">Cancelar</button>
+              <button onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase">Cancelar</button>
             </div>
           </div>
         </div>
@@ -206,27 +205,25 @@ function ContenedorPedidos() {
           <h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic">
             <Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta
           </h1>
+          <p className="text-slate-500 font-bold italic text-sm mt-1">Sincronizado con Central</p>
         </header>
 
         <main className="w-full space-y-6 pb-20 px-2">
           {clientesAgrupados.map((cliente) => {
             const estaAbierto = expandido === cliente.idUnico;
-            const mapaActivo = verMapa === cliente.idUnico;
 
             return (
               <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
-                <div className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900" onClick={() => { setExpandido(estaAbierto ? null : cliente.idUnico); detenerGPS(); }}>
+                <div className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900" onClick={() => { setExpandido(estaAbierto ? null : cliente.idUnico); detenerNavegacion(); }}>
                   <div className="flex justify-between items-start mb-4">
-                    <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest tracking-tighter">Punto de Entrega</span>
-                    <div className="flex gap-2">
-                      {esTelefonoValido(cliente.telefono) && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}
-                    </div>
+                    <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Destino</span>
+                    {esTelefonoValido(cliente.telefono) && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}
                   </div>
-                  <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase leading-none break-words italic">{cliente.nombre}</h2>
+                  <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase italic leading-none break-words">{cliente.nombre}</h2>
                   <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={22} className="text-indigo-500 shrink-0" /><p className="text-base md:text-lg leading-tight break-words">{cliente.direccion}</p></div>
                   <div className="flex justify-between items-end pt-6 border-t border-slate-100">
                     <div className="flex-1">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Total Acumulado' : 'Próxima: ' + cliente.pedidos[0].hora_entrega}</p>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Monto Total' : 'Próxima: ' + cliente.pedidos[0].hora_entrega}</p>
                       <p className="text-4xl font-black text-slate-800">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p>
                     </div>
                     <div className="text-indigo-600 bg-indigo-50 p-3 rounded-full">{estaAbierto ? <ChevronUp size={32}/> : <ChevronDown size={32}/>}</div>
@@ -236,19 +233,6 @@ function ContenedorPedidos() {
                 {estaAbierto && (
                   <div className="bg-slate-50 p-4 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in">
                     
-                    {/* VISOR DE MAPA COMPACTO */}
-                    {mapaActivo && posicionActual && (
-                      <div className="relative w-full h-80 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl group">
-                        <iframe width="100%" height="100%" frameBorder="0" src={`https://maps.google.com/maps?saddr=LAT,LNG&daddr=DIRECCION&output=embed{posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(cliente.direccion)}&t=m&z=15&output=embed`}></iframe>
-                        <button 
-                          onClick={() => setMapaFullscreen(true)}
-                          className="absolute bottom-4 right-4 bg-white p-3 rounded-2xl shadow-2xl text-indigo-600 border border-indigo-50 active:scale-90 transition"
-                        >
-                          <Maximize2 size={24} />
-                        </button>
-                      </div>
-                    )}
-
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
@@ -271,7 +255,7 @@ function ContenedorPedidos() {
                             </div>
                             <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
                               <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                              <button onClick={() => iniciarCaptura(p)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 transition"><Camera size={24}/></button>
+                              <button onClick={() => iniciarCaptura(p)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 active:scale-90 transition"><Camera size={24}/></button>
                             </div>
                           </div>
                         );
@@ -279,11 +263,12 @@ function ContenedorPedidos() {
                     </div>
 
                     <div className="flex flex-col gap-6 w-full">
+                      {/* Botón Principal: Lanza GPS Fullscreen directamente */}
                       <button 
-                        onClick={() => iniciarSeguimientoGPS(cliente.idUnico)} 
-                        className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition"
+                        onClick={() => iniciarNavegacionAmplia(cliente.idUnico)} 
+                        className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition active:scale-95"
                       >
-                        <Navigation size={26}/> {mapaActivo ? "Siguiedo Ruta GPS..." : "Ver Ruta GPS"}
+                        <Navigation2 size={28}/> Ver Ruta GPS en Vivo
                       </button>
                       
                       {cliente.pedidos.length > 1 && (
@@ -292,7 +277,7 @@ function ContenedorPedidos() {
                         </button>
                       )}
 
-                      <button onClick={() => { setExpandido(null); detenerGPS(); }} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
+                      <button onClick={() => { setExpandido(null); detenerNavegacion(); }} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
                         <XCircle size={20}/> Cerrar Detalles
                       </button>
                     </div>
