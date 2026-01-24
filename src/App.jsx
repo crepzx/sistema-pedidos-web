@@ -14,12 +14,14 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// --- UTILIDAD: Formato de Fecha Chileno ---
 const formatearFechaChile = (fechaStr) => {
   if (!fechaStr) return '--/--/----';
   const [year, month, day] = fechaStr.split('-');
   return `${day}-${month}-${year}`;
 };
 
+// --- COMPONENTE MODAL PERSONALIZADO ---
 const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'confirm' }) => {
   if (!isOpen) return null;
   return (
@@ -33,8 +35,8 @@ const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'conf
           <p className="text-slate-500 text-sm leading-relaxed">{message}</p>
         </div>
         <div className="p-4 bg-slate-50 flex gap-3">
-          {onCancel && <button onClick={onCancel} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-200 rounded-2xl transition">Cancelar</button>}
-          <button onClick={onConfirm} className={`flex-1 py-3 font-bold text-white rounded-2xl shadow-lg transition active:scale-95 ${type === 'confirm' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>Confirmar</button>
+          {onCancel && <button onClick={onCancel} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-200 rounded-2xl transition text-xs uppercase">Cancelar</button>}
+          <button onClick={onConfirm} className={`flex-1 py-3 font-bold text-white rounded-2xl shadow-lg transition active:scale-95 text-xs uppercase ${type === 'confirm' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>Confirmar</button>
         </div>
       </div>
     </div>
@@ -48,6 +50,7 @@ function ContenedorPedidos() {
   const [posicionActual, setPosicionActual] = useState(null);
   const [cargando, setCargando] = useState(true);
   
+  // Estados para foto y carga
   const [pedidoEnProceso, setPedidoEnProceso] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [subiendo, setSubiendo] = useState(false);
@@ -90,20 +93,17 @@ function ContenedorPedidos() {
     setCargando(false);
   }
 
+  // --- GPS: ACTIVA EL PERMISO NATIVO ---
   const activarNavegacion = (clienteId) => {
-    if (!navigator.geolocation) return alert("Tu navegador no soporta GPS");
-
     const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
-
+    
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setPosicionActual({ lat: position.coords.latitude, lng: position.coords.longitude });
+      (pos) => {
+        setPosicionActual({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setVerMapa(clienteId);
       },
       (err) => {
-        let msg = "No pudimos acceder al GPS.";
-        if (err.code === 1) msg = "Por favor, autoriza el acceso a la ubicación en los ajustes de tu iPhone/Android.";
-        alert(msg);
+        alert("Error: Debes permitir el acceso al GPS en la configuración de tu iPhone/Android para ver la ruta.");
       },
       options
     );
@@ -111,8 +111,8 @@ function ContenedorPedidos() {
 
   const iniciarCaptura = (pedido) => {
     setPedidoEnProceso(pedido);
-    if (fileInputRef.current) fileInputRef.current.value = ""; // Limpiar para permitir reintento
-    setTimeout(() => fileInputRef.current.click(), 100);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setTimeout(() => fileInputRef.current.click(), 150);
   };
 
   const manejarFoto = (e) => {
@@ -124,71 +124,63 @@ function ContenedorPedidos() {
     }
   };
 
-  const reintentarFoto = () => {
-    setFotoPreview(null);
-    setTimeout(() => fileInputRef.current.click(), 100);
-  };
-
-  const cancelarTodo = () => {
-    setFotoPreview(null);
-    setPedidoEnProceso(null);
-  };
-
   const confirmarEntregaFinal = async () => {
     setSubiendo(true);
     try {
       const base64Data = fotoPreview.split(',')[1];
       const blob = await fetch(`data:image/jpeg;base64,${base64Data}`).then(res => res.blob());
       const nombre = `entrega_${pedidoEnProceso.folio}_${Date.now()}.jpg`;
-      const { error: storageError } = await supabase.storage.from('evidencias').upload(`public/${nombre}`, blob);
-      
-      if (storageError) throw storageError;
+      const { error: sErr } = await supabase.storage.from('evidencias').upload(`public/${nombre}`, blob);
+      if (sErr) throw sErr;
 
       const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(`public/${nombre}`);
-      
-      const { error: dbError } = await supabase.from('pedidos')
+      const { error: dErr } = await supabase.from('pedidos')
         .update({ estado_entregado: true, url_foto: urlData.publicUrl })
         .eq('id', pedidoEnProceso.id);
 
-      if (!dbError) {
-        cancelarTodo();
+      if (!dErr) {
+        setFotoPreview(null);
+        setPedidoEnProceso(null);
         fetchPedidos();
       }
-    } catch (err) { alert("Error al procesar: " + err.message); }
+    } catch (e) { alert("Error al subir: " + e.message); }
     setSubiendo(false);
   };
 
-  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl">SINCRONIZANDO...</div>;
+  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl">CARGANDO...</div>;
 
+  // --- VISTA DE FOTO: OPTIMIZADA PARA IPHONE ---
   if (fotoPreview) {
     return (
-      <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2 sm:p-4">
-        <div className="w-full max-w-sm bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-          <div className="p-4 border-b flex items-center justify-between bg-slate-50">
+      <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2">
+        <div className="w-full max-w-sm bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
+          <div className="p-4 border-b flex items-center justify-between bg-white">
             <div className="flex items-center gap-2 text-indigo-600">
               <Camera size={18} />
-              <span className="font-black text-xs uppercase tracking-widest">Validar Entrega</span>
+              <span className="font-black text-[10px] uppercase tracking-widest">Validar Entrega</span>
             </div>
-            <XCircle onClick={cancelarTodo} className="text-slate-300 cursor-pointer" size={24} />
+            <XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} />
           </div>
           
-          <div className="bg-black flex-shrink-0 flex items-center justify-center overflow-hidden">
-            <img src={fotoPreview} className="max-h-[30vh] w-full object-contain" alt="Preview" />
+          {/* Imagen reducida para asegurar espacio de botones */}
+          <div className="bg-black flex-shrink-0 h-[25vh] flex items-center justify-center overflow-hidden">
+            <img src={fotoPreview} className="h-full w-full object-cover" alt="Preview" />
           </div>
 
-          <div className="p-6 overflow-y-auto">
-            <h4 className="text-xl font-black text-slate-800 text-center mb-6 uppercase">Folio #{pedidoEnProceso?.folio}</h4>
-            <div className="flex flex-col gap-3">
-              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-base flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all">
-                {subiendo ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <><CheckCircle size={22} /> Confirmar Entrega</>}
+          <div className="p-5 flex-1 flex flex-col justify-between overflow-y-auto">
+            <h4 className="text-lg font-black text-slate-800 text-center mb-4 uppercase tracking-tighter">Folio #{pedidoEnProceso?.folio}</h4>
+            
+            <div className="flex flex-col gap-2">
+              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all">
+                {subiendo ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> : <><CheckCircle size={20} /> CONFIRMAR ENTREGA</>}
               </button>
               
-              <button disabled={subiendo} onClick={reintentarFoto} className="w-full bg-slate-100 text-indigo-600 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border border-indigo-50">
-                <RotateCcw size={18} /> Tomar Nueva Foto
+              <button disabled={subiendo} onClick={() => { setFotoPreview(null); setTimeout(() => fileInputRef.current.click(), 150); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 active:scale-95">
+                <RotateCcw size={16} /> REPETIR FOTOGRAFÍA
               </button>
 
-              <button disabled={subiendo} onClick={cancelarTodo} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all">
-                Cancelar y Volver
+              <button disabled={subiendo} onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase active:scale-95 transition-all">
+                CANCELAR Y VOLVER
               </button>
             </div>
           </div>
@@ -202,14 +194,12 @@ function ContenedorPedidos() {
       <CustomModal {...modal} onCancel={() => setModal({ ...modal, isOpen: false })} />
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={manejarFoto} />
 
-      <div className="w-full px-2 py-6 sm:px-4 md:px-10"> 
-        <header className="w-full mb-8 border-b-2 border-slate-200 pb-6 flex justify-between items-center px-2">
-          <div>
-            <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
-              <Package className="text-indigo-600 shrink-0" size={32} /> Hoja de Ruta
-            </h1>
-            <p className="text-slate-500 font-bold italic text-sm">Logística en tiempo real</p>
-          </div>
+      <div className="w-full px-2 py-6 sm:px-4 md:px-10 lg:px-16"> 
+        <header className="w-full mb-8 border-b-2 border-slate-200 pb-6 px-2">
+          <h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic">
+            <Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta
+          </h1>
+          <p className="text-slate-500 font-bold italic text-sm mt-1">Sincronizado con Central</p>
         </header>
 
         <main className="w-full space-y-6 pb-20 px-2">
@@ -230,7 +220,7 @@ function ContenedorPedidos() {
 
                   <div className="flex justify-between items-end pt-6 border-t border-slate-100 gap-4">
                     <div className="flex-1">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Total Acumulado' : 'Próxima: ' + cliente.pedidos[0].hora_entrega}</p>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Monto Total' : 'Siguiente: ' + cliente.pedidos[0].hora_entrega}</p>
                       <p className="text-4xl font-black text-slate-800">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p>
                     </div>
                     <div className="text-indigo-600 bg-indigo-50 p-3 rounded-full">{estaAbierto ? <ChevronUp size={32}/> : <ChevronDown size={32}/>}</div>
@@ -239,9 +229,18 @@ function ContenedorPedidos() {
 
                 {estaAbierto && (
                   <div className="bg-slate-50 p-4 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in">
+                    
+                    {/* MAPA CORREGIDO: Origen y Destino con output=embed */}
                     {mapaActivo && posicionActual && (
                       <div className="w-full h-80 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl">
-                        <iframe width="100%" height="100%" frameBorder="0" style={{ border: 0 }} src={`https://www.google.com/maps/dir/?api=1&destination=$...{posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(cliente.direccion)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} allowFullScreen></iframe>
+                        <iframe 
+                          width="100%" 
+                          height="100%" 
+                          frameBorder="0" 
+                          style={{ border: 0 }} 
+                          src={`https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(cliente.direccion)}&t=m&z=15&output=embed`} 
+                          allowFullScreen
+                        ></iframe>
                       </div>
                     )}
 
@@ -275,16 +274,16 @@ function ContenedorPedidos() {
                     </div>
 
                     <div className="flex flex-col gap-6 w-full">
-                      <button onClick={() => activarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition"><Navigation size={26}/> {mapaActivo ? "Actualizar Mi Ruta" : "Iniciar GPS (Ver Ruta)"}</button>
+                      <button onClick={() => activarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition"><Navigation size={26}/> {mapaActivo ? "ACTUALIZAR UBICACIÓN" : "VER RUTA GPS EN VIVO"}</button>
                       
                       {cliente.pedidos.length > 1 && (
                         <button onClick={() => iniciarCaptura(cliente.pedidos[0])} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition">
-                          <CheckCircle size={26}/> Confirmar Entrega Total
+                          <CheckCircle size={26}/> CONFIRMAR ENTREGA TOTAL
                         </button>
                       )}
 
                       <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
-                        <XCircle size={20}/> Cerrar Detalles
+                        <XCircle size={20}/> CERRAR DETALLES
                       </button>
                     </div>
                   </div>
@@ -298,13 +297,5 @@ function ContenedorPedidos() {
   );
 }
 
-export default function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<ContenedorPedidos />} />
-      <Route path="*" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl italic uppercase tracking-tighter">POS DELIVERY</div>} />
-    </Routes>
-  );
-}
-
+export default function App() { return ( <Routes><Route path="/" element={<ContenedorPedidos />} /><Route path="*" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl italic uppercase tracking-tighter">POS DELIVERY</div>} /></Routes> ); }
 const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
