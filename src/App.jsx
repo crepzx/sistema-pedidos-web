@@ -213,67 +213,59 @@ function ContenedorPedidos() {
         {clientes.map((c) => {
           const isOpen = expandido === c.id;
           return (
-            <div key={c.id} className={`bg-white rounded-[2.5rem] shadow-xl overflow-hidden border-2 transition-all duration-500 ${isOpen ? 'border-indigo-500 ring-8 ring-indigo-50' : 'border-transparent shadow-slate-200'}`}>
+            <div key={c.id} className={`bg-white rounded-[2.5rem] shadow-xl overflow-hidden border-2 transition-all duration-500 ${isOpen ? 'border-indigo-500 ring-8 ring-indigo-50' : 'border-transparent'}`}>
               <div className="p-7 cursor-pointer" onClick={() => setExpandido(isOpen ? null : c.id)}>
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full">
-                    <Package size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-wider">Cliente</span>
-                  </div>
+                  <div className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full"><Package size={14} /><span className="text-[10px] font-black uppercase tracking-wider">Cliente</span></div>
                   {c.pedidos[0].telefono && <a href={`tel:${c.pedidos[0].telefono}`} onClick={e => e.stopPropagation()} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition-transform"><Phone size={20}/></a>}
                 </div>
-                
                 <h2 className="text-3xl font-black text-slate-800 uppercase italic leading-none mb-3">{c.nombre}</h2>
-                <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold">
-                    <MapPin size={18} className="text-indigo-500 shrink-0 mt-0.5"/>
-                    <p className="text-sm leading-tight uppercase">{c.direccion}</p>
-                </div>
-
+                <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={18} className="text-indigo-500 shrink-0 mt-0.5"/><p className="text-sm leading-tight uppercase">{c.direccion}</p></div>
                 <div className="flex justify-between items-end pt-6 border-t border-slate-50">
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase mb-1">Monto a Recaudar</p>
-                    <p className="text-3xl font-black text-indigo-600 tracking-tighter">${c.total.toLocaleString('es-CL')}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                        <p className="text-[10px] font-black text-slate-800 uppercase">{c.pedidos.length} ITEMS</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Pendientes</p>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-full text-slate-300">
-                        {isOpen ? <ChevronUp size={28}/> : <ChevronDown size={28}/>}
-                    </div>
-                  </div>
+                  <div><p className="text-[10px] text-slate-400 font-black uppercase mb-1">Monto Total</p><p className="text-3xl font-black text-indigo-600 tracking-tighter">${c.total.toLocaleString('es-CL')}</p></div>
+                  <div className="flex items-center gap-3"><div className="text-right"><p className="text-[10px] font-black text-slate-800 uppercase">{c.pedidos.length} ITEMS</p></div><div className="bg-slate-50 p-2 rounded-full text-slate-300">{isOpen ? <ChevronUp size={28}/> : <ChevronDown size={28}/>}</div></div>
                 </div>
               </div>
 
               {/* DETALLE DE PEDIDOS (HIJOS) */}
               {isOpen && (
-                <div className="bg-slate-50 p-6 space-y-4 border-t border-slate-100 animate-in slide-in-from-top-4">
-                  <div className="grid gap-4">
+                <div className="bg-slate-50 p-6 space-y-6 border-t border-slate-100 animate-in slide-in-from-top-4">
+                  <div className="grid gap-5">
                     {c.pedidos.map((p) => (
-                      <div key={p.id} className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-200 flex justify-between items-center group">
-                        <div className="flex-1 pr-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="bg-slate-900 text-white text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest italic"># {p.folio}</span>
-                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12}/> {p.hora_entrega || 'ASAP'}</span>
+                      <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                        {/* CABECERA Y PRODUCTOS (ANCHO COMPLETO) */}
+                        <div className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="bg-slate-900 text-white text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest italic">Folio # {p.folio}</span>
+                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12}/> {p.hora_entrega || 'Pendiente'}</span>
                           </div>
-                          <div className="space-y-1.5">
+                          
+                          <div className="space-y-2">
                             {p.detalles_pedido?.map((det, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-slate-600 uppercase bg-slate-50/50 p-2 rounded-xl border border-dashed border-slate-200">
-                                <span>{det.descripcion}</span>
-                                <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">x{det.cantidad}</span>
+                              <div key={idx} className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase bg-slate-50/50 p-3 rounded-xl border border-dashed border-slate-200">
+                                <span className="flex-1 pr-4">{det.descripcion}</span>
+                                <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100 shrink-0">x{det.cantidad}</span>
                               </div>
                             ))}
                           </div>
                         </div>
-                        <button onClick={() => { setPedidoActivo(p); fileRef.current.click(); }} className="bg-indigo-600 text-white p-5 rounded-[1.5rem] shadow-xl shadow-indigo-200 active:scale-95 active:bg-indigo-700 transition-all">
-                          <Camera size={28}/>
-                        </button>
+
+                        {/* BOTÓN DE CAMARA AL FONDO DE LA TARRETA */}
+                        <div className="bg-indigo-50/50 p-4 border-t border-slate-100">
+                            <button 
+                                onClick={() => { setPedidoActivo(p); fileRef.current.click(); }} 
+                                className="w-full bg-white text-indigo-600 py-3 rounded-2xl border-2 border-indigo-100 font-black uppercase text-[10px] flex items-center justify-center gap-3 shadow-sm active:scale-95 active:bg-indigo-600 active:text-white transition-all"
+                            >
+                                <Camera size={20}/> Validar con Fotografía
+                            </button>
+                        </div>
                       </div>
                     ))}
                   </div>
+
+                  {/* BOTÓN GPS INDEPENDIENTE */}
                   <button onClick={() => handleGPS(c.id)} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all border-b-4 border-slate-700">
-                    <Navigation2 size={20}/> Iniciar Navegación OSM
+                    <Navigation2 size={20}/> Iniciar Ruta GPS (OSM)
                   </button>
                 </div>
               )}
