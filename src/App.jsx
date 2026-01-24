@@ -20,7 +20,6 @@ const formatearFechaChile = (fechaStr) => {
   return `${day}-${month}-${year}`;
 };
 
-// Calcular distancia entre dos puntos (Haversine) para evitar refrescos innecesarios
 const calcularDistancia = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -44,7 +43,7 @@ function ContenedorPedidos() {
   
   const fileInputRef = useRef(null);
   const watchId = useRef(null);
-  const ultimaPosicionRef = useRef(null); // Evita parpadeo
+  const ultimaPosicionRef = useRef(null);
 
   useEffect(() => {
     fetchPedidos();
@@ -80,24 +79,22 @@ function ContenedorPedidos() {
     setCargando(false);
   }
 
-  // --- NAVEGACIÓN GPS GOOGLE MAPS ---
+  // --- GPS ---
   const iniciarNavegacion = (clienteId) => {
     if (!navigator.geolocation) return alert("GPS no disponible");
     if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
-
     setVerMapa(clienteId);
     setMapaFullscreen(true); 
 
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        // Solo actualizamos el mapa si el repartidor se movió más de 15 metros
-        if (!ultimaPosicionRef.current || calcularDistancia(ultimaPosicionRef.current.lat, ultimaPosicionRef.current.lng, latitude, longitude) > 15) {
+        if (!ultimaPosicionRef.current || calcularDistancia(ultimaPosicionRef.current.lat, ultimaPosicionRef.current.lng, latitude, longitude) > 12) {
           ultimaPosicionRef.current = { lat: latitude, lng: longitude };
           setPosicionActual({ lat: latitude, lng: longitude });
         }
       },
-      (err) => alert("Activa el GPS y da permisos de ubicación."),
+      (err) => alert("Activa el GPS y da permisos."),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
@@ -134,52 +131,62 @@ function ContenedorPedidos() {
       const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(`public/${nombre}`);
       await supabase.from('pedidos').update({ estado_entregado: true, url_foto: urlData.publicUrl }).eq('id', pedidoEnProceso.id);
       setFotoPreview(null); setPedidoEnProceso(null); fetchPedidos();
-    } catch (e) { alert("Error al subir evidencia."); }
+    } catch (e) { alert("Error al subir foto."); }
     setSubiendo(false);
   };
 
-  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl uppercase">Sincronizando Despachos...</div>;
-
-  // --- MODO PANTALLA COMPLETA (GOOGLE MAPS) ---
+  // --- MODO PANTALLA COMPLETA SIN UI DE GOOGLE ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
-    // q=coordenadas (pin usuario) | daddr=destino | ll=CENTRO DE CÁMARA | z=19 (zoom calle)
-    const urlGoogle = `https://maps.google.com/maps?q=${posicionActual.lat},${posicionActual.lng}&saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=19&t=m&output=embed&iwloc=near`;
+    // ll=posición usuario | z=19 | t=m (mapa) | output=embed
+    const urlGoogle = `https://maps.google.com/maps?q=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=19&t=m&output=embed&iwloc=near`;
 
     return (
-      <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden animate-in fade-in">
-        <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2">
-          <button onClick={detenerNavegacion} className="bg-white/95 p-4 rounded-2xl shadow-2xl text-red-500 active:scale-90 transition border border-slate-100"><XCircle size={26} /></button>
-          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl flex flex-col justify-center border border-slate-100">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Destino</p>
-            <p className="text-xs font-black text-slate-800 truncate uppercase italic">{clienteActivo?.nombre}</p>
+      <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden">
+        {/* Header Flotante */}
+        <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2 items-center">
+          <button onClick={detenerNavegacion} className="bg-white/95 p-4 rounded-2xl shadow-2xl text-red-500 border border-slate-100 active:scale-90 transition"><XCircle size={26} /></button>
+          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-100">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Destino de Entrega</p>
+            <p className="text-xs font-black text-slate-800 truncate uppercase italic leading-none">{clienteActivo?.nombre}</p>
           </div>
         </div>
         
-        {/* Usamos el src dinámico. El navegador no hará flash blanco si la URL cambia suavemente sin 'key' */}
-        <iframe className="w-full h-full border-none" frameBorder="0" src={urlGoogle} allowFullScreen></iframe>
+        {/* TÉCNICA DE RECORTE: Ocultamos el cuadro superior izquierdo de Google con desplazamiento negativo */}
+        <div className="flex-1 w-full relative overflow-hidden bg-slate-200">
+           <iframe 
+             className="absolute border-none"
+             style={{ 
+               top: '-60px',   // Empujamos el mapa hacia arriba para ocultar el buscador
+               left: '-10px', 
+               width: 'calc(100% + 20px)', 
+               height: 'calc(100% + 120px)' // Compensamos el alto para que no quede espacio vacío abajo
+             }}
+             src={urlGoogle} 
+             allowFullScreen
+           ></iframe>
+        </div>
 
         <div className="absolute bottom-8 left-8 right-8 z-[510]">
-          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900/90 text-white py-5 rounded-[2rem] font-black uppercase text-xs shadow-2xl flex items-center justify-center gap-3 border border-white/10">
-            <Minimize2 size={18} /> Ver Lista de Pedidos
+          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900/95 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition">
+            <Minimize2 size={18} /> Volver a Hoja de Ruta
           </button>
         </div>
       </div>
     );
   }
 
-  // --- VISTA PREVIA FOTO ---
   if (fotoPreview) {
     return (
       <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2">
-        <div className="w-full max-w-sm bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
-          <div className="p-4 border-b flex items-center justify-between"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase"><Camera size={18} /> Validar</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
-          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" alt="Evidencia" /></div>
+        <div className="w-full max-w-sm bg-white rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
+          <div className="p-4 border-b flex items-center justify-between"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Camera size={18} /> Validar</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
+          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" /></div>
           <div className="p-6 flex-1 flex flex-col justify-between">
-            <h4 className="text-2xl font-black text-slate-800 text-center mb-6 italic uppercase leading-none">Folio #{pedidoEnProceso?.folio}</h4>
+            <h4 className="text-2xl font-black text-slate-800 text-center mb-6 italic uppercase leading-none italic uppercase">Folio #{pedidoEnProceso?.folio}</h4>
             <div className="flex flex-col gap-3">
-              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
-              <button onClick={() => { setFotoPreview(null); fileInputRef.current.click(); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50">Repetir Foto</button>
+              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Sincronizando..." : "Confirmar Entrega"}</button>
+              <button onClick={() => { setFotoPreview(null); setTimeout(() => fileInputRef.current.click(), 150); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50 italic">Repetir Foto</button>
               <button onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase">Cancelar</button>
             </div>
           </div>
@@ -192,9 +199,7 @@ function ContenedorPedidos() {
     <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={manejarFoto} />
       <div className="w-full px-2 py-6 sm:px-4 md:px-10 lg:px-16"> 
-        <header className="mb-10 border-b-2 border-slate-200 pb-6 px-4">
-          <h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic"><Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta</h1>
-        </header>
+        <header className="mb-10 border-b-2 border-slate-200 pb-6 px-4"><h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic"><Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta</h1></header>
 
         <main className="space-y-6 pb-20 px-2">
           {clientesAgrupados.map((cliente) => {
@@ -202,11 +207,11 @@ function ContenedorPedidos() {
             return (
               <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 <div className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900" onClick={() => { setExpandido(estaAbierto ? null : cliente.idUnico); detenerNavegacion(); }}>
-                   <div className="flex justify-between items-start mb-4"><span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest tracking-tighter">Punto de Entrega</span>{esTelefonoValido(cliente.telefono) && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}</div>
-                   <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase leading-none break-words italic">{cliente.nombre}</h2>
-                   <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={22} className="text-indigo-500 shrink-0" /><p className="text-base md:text-lg leading-tight break-words italic">{cliente.direccion}</p></div>
-                   <div className="flex justify-between items-end pt-6 border-t border-slate-100">
-                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Recaudación Carga' : 'Pendientes'}</p><p className="text-4xl font-black text-slate-800">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p></div>
+                  <div className="flex justify-between items-start mb-4"><span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Punto de Entrega</span>{esTelefonoValido(cliente.telefono) && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}</div>
+                  <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase italic leading-none break-words tracking-tighter">{cliente.nombre}</h2>
+                  <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={22} className="text-indigo-500 shrink-0" /><p className="text-base md:text-lg leading-tight break-words italic uppercase">{cliente.direccion}</p></div>
+                  <div className="flex justify-between items-end pt-6 border-t border-slate-100">
+                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Recaudación Carga' : 'Pendientes'}</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p></div>
                     <div className="text-indigo-600 bg-indigo-50 p-3 rounded-full">{estaAbierto ? <ChevronUp size={32}/> : <ChevronDown size={32}/>}</div>
                   </div>
                 </div>
@@ -222,15 +227,15 @@ function ContenedorPedidos() {
                             <div className="p-6 flex-1">
                               {esFactura && <div className="mb-4 text-orange-600 font-black text-[10px] border-b pb-1 uppercase italic">RUT: {p.rut_cliente}</div>}
                               <div className="space-y-2 mb-4">{p.detalles_pedido?.map((det, idx) => (<div key={idx} className="flex justify-between text-xs text-slate-600 border-b border-slate-50 pb-1"><span className="font-bold uppercase truncate pr-4">{det.descripcion}</span><span className="font-black shrink-0">x{det.cantidad}</span></div>))}</div>
-                              {p.quien_recibe && <div className="mt-4 flex items-center gap-2 text-indigo-600 bg-indigo-50 p-3 rounded-xl"><UserCheck size={16}/><p className="text-[10px] font-black uppercase truncate italic">Recibe: {p.quien_recibe}</p></div>}
+                              {p.quien_recibe && <div className="mt-4 flex items-center gap-2 text-indigo-600 bg-indigo-50 p-3 rounded-xl"><UserCheck size={16}/><p className="text-[10px] font-black uppercase italic">Recibe: {p.quien_recibe}</p></div>}
                             </div>
-                            <div className="p-6 bg-slate-50 border-t flex justify-between items-center"><span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span><button onClick={() => iniciarCaptura(p)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition"><Camera size={24}/></button></div>
+                            <div className="p-6 bg-slate-50 border-t flex justify-between items-center"><span className="text-2xl font-black text-emerald-600 tracking-tighter">${Number(p.total_pedido).toLocaleString('es-CL')}</span><button onClick={() => iniciarCaptura(p)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition"><Camera size={24}/></button></div>
                           </div>
                         );
                       })}
                     </div>
                     <div className="flex flex-col gap-6 w-full">
-                      <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition-all"><Navigation2 size={28}/> Iniciar GPS (Centrado en mí)</button>
+                      <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition-all"><Navigation2 size={28}/> Iniciar GPS (Modo Inmersivo)</button>
                       <button onClick={() => { setExpandido(null); detenerNavegacion(); }} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs"><XCircle size={20}/> Cerrar Detalles</button>
                     </div>
                   </div>
