@@ -33,6 +33,7 @@ function ContenedorPedidos() {
   
   const fileInputRef = useRef(null);
   const watchId = useRef(null);
+  const mapaInicializado = useRef(false); // Nuevo: controlar inicialización
 
   useEffect(() => {
     fetchPedidos();
@@ -78,6 +79,7 @@ function ContenedorPedidos() {
 
     if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
 
+    mapaInicializado.current = false; // Reset al iniciar nueva navegación
     setVerMapa(clienteId);
     setMapaFullscreen(true); 
 
@@ -87,8 +89,12 @@ function ContenedorPedidos() {
         setPosicionActual({ 
           lat: pos.coords.latitude, 
           lng: pos.coords.longitude,
-          timestamp: Date.now() // Forzamos actualización de estado
+          accuracy: pos.coords.accuracy
         });
+        // Marcamos como inicializado después de la primera posición
+        if (!mapaInicializado.current) {
+          mapaInicializado.current = true;
+        }
       },
       (err) => alert("Error GPS: Asegúrate de dar permisos de ubicación."),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
@@ -100,6 +106,7 @@ function ContenedorPedidos() {
     setVerMapa(null);
     setMapaFullscreen(false);
     setPosicionActual(null);
+    mapaInicializado.current = false;
   };
 
   // --- LÓGICA DE FOTO ---
@@ -140,9 +147,16 @@ function ContenedorPedidos() {
 
   if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl">CONECTANDO...</div>;
 
-  // --- MODO NAVEGACIÓN GPS FULLSCREEN (SIN BORDES) ---
+  // --- MODO NAVEGACIÓN GPS FULLSCREEN (SIN PARPADEOS) ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
+    
+    // URL optimizada: usar 'center' y zoom apropiado
+    const mapaURL = `https://www.google.com/maps/embed/v1/directions?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY'}&origin=${posicionActual.lat},${posicionActual.lng}&destination=${encodeURIComponent(clienteActivo.direccion)}&mode=driving&zoom=16`;
+
+    // Alternativa SIN API KEY (menos estable pero funcional):
+    const mapaURLFallback = `https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&output=embed`;
+
     return (
       <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden">
         {/* Header Flotante Minimalista */}
@@ -156,13 +170,18 @@ function ContenedorPedidos() {
           </div>
         </div>
 
-        {/* Mapa Limpio: Centrado en posicionActual.lat/lng */}
+        {/* Indicador de precisión GPS */}
+        <div className="absolute top-24 right-4 z-[510] bg-white/90 backdrop-blur px-3 py-2 rounded-xl shadow-lg">
+          <p className="text-[8px] font-black text-slate-500 uppercase">GPS ±{Math.round(posicionActual.accuracy)}m</p>
+        </div>
+
+        {/* Mapa SIN key (no se recarga) - Solo se monta una vez */}
         <iframe 
-          key={posicionActual.timestamp} // Forzar re-render del iframe al movernos para centrar
           className="w-full h-full border-none"
           frameBorder="0" 
-          src={`https://maps.google.com/maps?q=${posicionActual.lat},${posicionActual.lng}&saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=18&t=m&output=embed&iwloc=near`} 
+          src={mapaURLFallback}
           allowFullScreen
+          loading="eager"
         ></iframe>
 
         {/* Botón Inferior: Volver */}
