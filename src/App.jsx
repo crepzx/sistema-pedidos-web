@@ -38,7 +38,7 @@ const formatearFechaChile = (fechaStr) => {
   return `${day}-${month}-${year}`;
 };
 
-// --- 3. SUB-COMPONENTE: MOTOR DE NAVEGACIÓN (CON FILTRO CHILE) ---
+// --- 3. SUB-COMPONENTE: MOTOR DE NAVEGACIÓN REFORZADO ---
 function MotorNavegacion({ origen, direccionDestino }) {
   const map = useMap();
   const routingRef = useRef(null);
@@ -47,17 +47,22 @@ function MotorNavegacion({ origen, direccionDestino }) {
   useEffect(() => {
     if (!map || !origen || !direccionDestino) return;
 
-    // Solución al cuadro gris: forzar redibujado una vez el contenedor es visible
-    setTimeout(() => { map.invalidateSize(); }, 300);
+    // Asegurar que el mapa ocupe todo el espacio antes de buscar
+    map.invalidateSize();
 
     const geocoder = L.Control.Geocoder.nominatim();
     
-    // MEJORA: Concatenamos ", Chile" para asegurar que la búsqueda no salga del país
-    const direccionBusqueda = `${direccionDestino}, Chile`;
+    // REFUERZO: Limpiamos la dirección y forzamos ciudad y país
+    // Esto evita que "San Miguel" termine en Santiago en vez de Coquimbo
+    const direccionLimpia = direccionDestino.replace(/[#]/g, ''); // Quita # de folios si existen
+    const queryBusqueda = `${direccionLimpia}, Coquimbo, Chile`;
 
-    geocoder.geocode(direccionBusqueda, (results) => {
+    console.log("Buscando destino exacto:", queryBusqueda);
+
+    geocoder.geocode(queryBusqueda, (results) => {
       if (results && results.length > 0) {
         const dest = results[0].center;
+        console.log("Destino encontrado:", dest);
         setCoordsCliente(dest); 
 
         if (routingRef.current) map.removeControl(routingRef.current);
@@ -67,18 +72,25 @@ function MotorNavegacion({ origen, direccionDestino }) {
             L.latLng(origen.lat, origen.lng),
             L.latLng(dest.lat, dest.lng)
           ],
-          router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-          lineOptions: { styles: [{ color: '#4f46e5', weight: 6, opacity: 0.8 }] },
+          router: L.Routing.osrmv1({ 
+            serviceUrl: 'https://router.project-osrm.org/route/v1',
+            language: 'es' 
+          }),
+          lineOptions: { 
+            styles: [{ color: '#4f46e5', weight: 7, opacity: 0.8 }] 
+          },
           addWaypoints: false,
           draggableWaypoints: false,
           fitSelectedRoutes: false, 
           show: false,
           createMarker: () => null 
         }).addTo(map);
+      } else {
+        console.error("No se pudo encontrar la dirección:", queryBusqueda);
       }
     });
 
-    // Centrado suave sobre el repartidor
+    // Centrado forzado en el repartidor (tú)
     map.setView([origen.lat, origen.lng], 17);
 
     return () => { if (routingRef.current) map.removeControl(routingRef.current); };
@@ -86,7 +98,7 @@ function MotorNavegacion({ origen, direccionDestino }) {
 
   return coordsCliente ? (
     <Marker position={[coordsCliente.lat, coordsCliente.lng]} icon={iconoCliente}>
-        <Popup><div className="font-bold uppercase text-[10px]">Destino: {direccionDestino}</div></Popup>
+        <Popup><div className="font-bold text-center">CLIENTE<br/>{direccionDestino}</div></Popup>
     </Marker>
   ) : null;
 }
@@ -141,14 +153,17 @@ function ContenedorPedidos() {
   }
 
   const iniciarNavegacion = (clienteId) => {
-    if (!navigator.geolocation) return alert("GPS no compatible");
+    if (!navigator.geolocation) return alert("Navegador sin GPS");
     setVerMapa(clienteId);
     setMapaFullscreen(true); 
 
+    // Configuración de alta precisión para evitar errores de 500 metros
+    const opcionesGps = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
+
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => setPosicionActual({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => alert("Activa el GPS de tu celular."),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      (err) => alert("Activa el GPS y da permisos en tu celular."),
+      opcionesGps
     );
   };
 
@@ -157,6 +172,7 @@ function ContenedorPedidos() {
     setVerMapa(null); setMapaFullscreen(false); setPosicionActual(null);
   };
 
+  // --- LOGICA DE CAMARA ---
   const iniciarCaptura = (p) => {
     setPedidoEnProceso(p);
     if (fileInputRef.current) fileInputRef.current.value = ""; 
@@ -186,32 +202,32 @@ function ContenedorPedidos() {
     setSubiendo(false);
   };
 
-  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl uppercase tracking-tighter">Sincronizando Hoja de Ruta...</div>;
+  if (cargando) return <div className="h-screen w-full flex items-center justify-center font-black text-indigo-600 animate-pulse text-2xl uppercase">Sincronizando con Central...</div>;
 
-  // --- RENDERIZADO MAPA ---
+  // --- RENDER MAPA ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
     return (
       <div className="fixed inset-0 z-[500] bg-white flex flex-col overflow-hidden animate-in fade-in">
         <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2">
-          <button onClick={detenerNavegacion} className="bg-white p-4 rounded-2xl shadow-2xl text-red-500 border border-slate-100 active:scale-90 transition"><XCircle size={26} /></button>
+          <button onClick={detenerNavegacion} className="bg-white p-4 rounded-2xl shadow-2xl text-red-500 active:scale-90 transition border border-slate-100"><XCircle size={26} /></button>
           <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-100 flex flex-col justify-center">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Destino de Carga</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Destino: {clienteActivo?.direccion}</p>
             <p className="text-xs font-black text-slate-800 truncate uppercase italic">{clienteActivo?.nombre}</p>
           </div>
         </div>
 
         <div className="flex-1 w-full h-full relative z-[501]">
           <MapContainer center={[posicionActual.lat, posicionActual.lng]} zoom={17} zoomControl={false} style={{ height: '100%', width: '100%' }}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
             <Marker position={[posicionActual.lat, posicionActual.lng]} icon={iconoRepartidor} />
             <MotorNavegacion origen={posicionActual} direccionDestino={clienteActivo.direccion} />
           </MapContainer>
         </div>
 
         <div className="absolute bottom-8 left-8 right-8 z-[510]">
-          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase text-xs shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition">
-            <Minimize2 size={18} /> Ver Lista de Pedidos
+          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase text-xs shadow-2xl flex items-center justify-center gap-3">
+            <Minimize2 size={18} /> Salir del Mapa
           </button>
         </div>
       </div>
@@ -226,10 +242,10 @@ function ContenedorPedidos() {
           <div className="p-4 border-b flex items-center justify-between bg-white"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Camera size={18} /> Validar</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
           <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" /></div>
           <div className="p-6 flex-1 flex flex-col justify-between">
-            <h4 className="text-2xl font-black text-slate-800 text-center mb-6 uppercase italic">Folio #{pedidoEnProceso?.folio}</h4>
+            <h4 className="text-2xl font-black text-slate-800 text-center mb-6">Folio #{pedidoEnProceso?.folio}</h4>
             <div className="flex flex-col gap-3">
-              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
-              <button onClick={() => { setFotoPreview(null); fileInputRef.current.click(); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50 font-black">Repetir Foto</button>
+              <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
+              <button onClick={() => { setFotoPreview(null); fileInputRef.current.click(); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50">Repetir Foto</button>
               <button onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase">Cancelar</button>
             </div>
           </div>
@@ -243,7 +259,7 @@ function ContenedorPedidos() {
       <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={manejarFoto} />
       <div className="w-full px-2 py-6 sm:px-4 md:px-10 lg:px-16"> 
         <header className="mb-10 border-b-2 border-slate-200 pb-6 px-4">
-          <h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic italic tracking-tighter"><Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta</h1>
+          <h1 className="text-3xl md:text-5xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter italic"><Package className="text-indigo-600 shrink-0" size={36} /> Hoja de Ruta</h1>
         </header>
 
         <main className="space-y-6 pb-20 px-2">
@@ -256,7 +272,7 @@ function ContenedorPedidos() {
                    <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase leading-none break-words tracking-tighter">{cliente.nombre}</h2>
                    <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={22} className="text-indigo-500 shrink-0" /><p className="text-base md:text-lg leading-tight break-words italic uppercase">{cliente.direccion}</p></div>
                    <div className="flex justify-between items-end pt-6 border-t border-slate-100">
-                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Recaudación Carga' : 'Pendientes'}</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p></div>
+                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Recaudación Carga' : 'Pendientes'}</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length}</p></div>
                     <div className="text-indigo-600 bg-indigo-50 p-3 rounded-full">{estaAbierto ? <ChevronUp size={32}/> : <ChevronDown size={32}/>}</div>
                   </div>
                 </div>
@@ -278,10 +294,7 @@ function ContenedorPedidos() {
                         );
                       })}
                     </div>
-                    <div className="flex flex-col gap-6 w-full">
-                      <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition-all"><Navigation2 size={28}/> Iniciar GPS (Mapa OSM)</button>
-                      <button onClick={() => { setExpandido(null); detenerNavegacion(); }} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs"><XCircle size={20}/> Cerrar Detalles</button>
-                    </div>
+                    <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="w-full bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition-all"><Navigation2 size={28}/> Iniciar GPS (Mapa OSM)</button>
                   </div>
                 )}
               </div>
