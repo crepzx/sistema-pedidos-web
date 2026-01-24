@@ -47,12 +47,13 @@ function MotorLogistico({ origen, direccionDestino }) {
     const geocoder = L.Control.Geocoder.nominatim();
     // Forzamos búsqueda en Coquimbo, Chile
     const queryCompleta = `${direccionDestino.replace('#', '')} Chile`;
-
+    console.log(queryCompleta);
+    
     geocoder.geocode(queryCompleta, (results) => {
       if (results && results.length > 0) {
         const dest = results[0].center;
         setCoordsDestino(dest);
-
+console.log(results);
         if (routingRef.current) map.removeControl(routingRef.current);
         
         routingRef.current = L.Routing.control({
