@@ -81,11 +81,11 @@ function ContenedorPedidos() {
     setCargando(false);
   }
 
-  // --- GPS: ALTA PRECISIÓN Y SEGUIMIENTO ---
+  // --- GPS: ALTA PRECISIÓN ---
   const iniciarNavegacion = (clienteId) => {
-    if (!navigator.geolocation) return alert("Tu equipo no soporta GPS.");
+    if (!navigator.geolocation) return alert("GPS no disponible");
     
-    // 1. Pedir permiso explícito y obtener posición inicial
+    // Forzamos permiso inicial
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -93,22 +93,21 @@ function ContenedorPedidos() {
         setVerMapa(clienteId);
         setMapaFullscreen(true);
         
-        // 2. Activar seguimiento constante de alta precisión
         if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
         watchId.current = navigator.geolocation.watchPosition(
           (watchPos) => {
             const { latitude, longitude } = watchPos.coords;
-            // Filtro de 10 metros para no "quemar" el iframe con refrescos
+            // Solo refrescamos si avanzamos 10 metros para evitar el parpadeo del iframe
             if (!ultimaPosicionRef.current || calcularDistancia(ultimaPosicionRef.current.lat, ultimaPosicionRef.current.lng, latitude, longitude) > 10) {
               ultimaPosicionRef.current = { lat: latitude, lng: longitude };
               setPosicionActual({ lat: latitude, lng: longitude });
             }
           },
-          (err) => console.log("GPS Signal Lost"),
+          null,
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       },
-      (err) => alert("Activa el GPS y permite los permisos de ubicación en Chrome/Safari."),
+      (err) => alert("Error: Activa el GPS y acepta los permisos de ubicación."),
       { enableHighAccuracy: true }
     );
   };
@@ -145,34 +144,37 @@ function ContenedorPedidos() {
       const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(`public/${nombre}`);
       await supabase.from('pedidos').update({ estado_entregado: true, url_foto: urlData.publicUrl }).eq('id', pedidoEnProceso.id);
       setFotoPreview(null); setPedidoEnProceso(null); fetchPedidos();
-    } catch (e) { alert("Error al subir evidencia."); }
+    } catch (e) { alert("Error al guardar entrega."); }
     setSubiendo(false);
   };
 
-  // --- RENDERIZADO MAPA ---
+  // --- RENDER: MAPA FULLSCREEN ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
-    // TRUCO: daddr (ruta) + q=loc (marcador usuario) + ll (centrado de cámara)
-    const urlGoogle = `https://maps.google.com/maps{posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=19&t=m&output=embed&iwloc=near`;
+    
+    // URL CORREGIDA: Usamos ${} para interpolar variables correctamente
+    const urlGoogle = `https://maps.google.com/maps?q=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=19&t=m&output=embed&iwloc=near`;
 
     return (
-      <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden animate-in fade-in duration-300">
+      <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden animate-in fade-in">
+        {/* Header Flotante */}
         <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2 items-center">
           <button onClick={detenerNavegacion} className="bg-white/95 p-4 rounded-2xl shadow-2xl text-red-500 border border-slate-100 active:scale-90 transition"><XCircle size={26} /></button>
-          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-100 flex flex-col justify-center">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Destino</p>
-            <p className="text-xs font-black text-slate-800 truncate uppercase italic leading-none">{clienteActivo?.nombre}</p>
+          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-100">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 text-center">Navegación GPS Activa</p>
+            <p className="text-xs font-black text-slate-800 truncate uppercase italic text-center">{clienteActivo?.nombre}</p>
           </div>
         </div>
         
+        {/* CONTENEDOR DE RECORTE: Oculta la barra de búsqueda de Google */}
         <div className="flex-1 w-full relative overflow-hidden bg-slate-200">
            <iframe 
              className="absolute border-none"
              style={{ 
-               top: '-70px',   // Recorte para ocultar el cuadro de opciones de Google
+               top: '-75px', // Empuja el buscador fuera del marco visible
                left: '-10px', 
                width: 'calc(100% + 20px)', 
-               height: 'calc(100% + 140px)' 
+               height: 'calc(100% + 150px)' 
              }}
              src={urlGoogle} 
              allowFullScreen
@@ -180,7 +182,7 @@ function ContenedorPedidos() {
         </div>
 
         <div className="absolute bottom-8 left-8 right-8 z-[510]">
-          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900/90 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition">
+          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900/95 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition">
             <Minimize2 size={18} /> Salir del Mapa
           </button>
         </div>
@@ -188,15 +190,15 @@ function ContenedorPedidos() {
     );
   }
 
-  // --- VISTA FOTO ---
+  // --- VISTA PREVIA FOTO ---
   if (fotoPreview) {
     return (
       <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2">
         <div className="w-full max-w-sm bg-white rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
-          <div className="p-4 border-b flex items-center justify-between"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Camera size={18} /> Validar Entrega</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
-          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" alt="Evidencia" /></div>
+          <div className="p-4 border-b flex items-center justify-between"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Camera size={18} /> Validar</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
+          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" /></div>
           <div className="p-6 flex-1 flex flex-col justify-between">
-            <h4 className="text-2xl font-black text-slate-800 text-center mb-6 italic italic uppercase leading-none">Folio #{pedidoEnProceso?.folio}</h4>
+            <h4 className="text-2xl font-black text-slate-800 text-center mb-6 italic uppercase leading-none">Folio #{pedidoEnProceso?.folio}</h4>
             <div className="flex flex-col gap-3">
               <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
               <button onClick={() => { setFotoPreview(null); setTimeout(() => fileInputRef.current.click(), 150); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50 italic font-black">Repetir Foto</button>
