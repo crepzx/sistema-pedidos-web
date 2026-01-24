@@ -198,9 +198,9 @@ function ContenedorPedidos() {
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-black italic tracking-tighter uppercase flex items-center gap-2">
-              <ShoppingBag className="text-indigo-400" /> POS Delivery
+              <ShoppingBag className="text-indigo-400" /> Control de Pedidos
             </h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">Operaciones Coquimbo</p>
+            {/* <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">Seguimiento y administración de pedidos en tiempo real</p>*/}
           </div>
           <button onClick={fetchData} className="bg-white/10 p-3 rounded-2xl active:scale-90 transition-all border border-white/5">
             <RotateCcw size={22} className="text-indigo-400" />
@@ -237,7 +237,7 @@ function ContenedorPedidos() {
                         <div className="p-6">
                           <div className="flex items-center gap-2 mb-4">
                             <span className="bg-slate-900 text-white text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest italic">Folio # {p.folio}</span>
-                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12}/> {p.hora_entrega || 'Pendiente'}</span>
+                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12}/>{p.fecha_entrega} {p.hora_entrega || 'Pendiente'}</span>
                           </div>
                           
                           <div className="space-y-2">
