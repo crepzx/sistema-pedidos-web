@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Routes, Route, useParams } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { 
   MapPin, Clock, Navigation, CheckCircle, 
   ChevronDown, ChevronUp, Package, UserCheck, 
   Search, AlertCircle, Phone, XCircle, Calendar,
-  CheckCircle2, Info
+  Camera, ArrowLeft, Image as ImageIcon, UploadCloud
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -13,58 +13,36 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// --- MODAL DE CONFIRMACIÓN ---
-const CustomModal = ({ isOpen, title, message, onConfirm, onCancel, type = 'confirm' }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-8 text-center">
-          <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${type === 'confirm' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-            {type === 'confirm' ? <CheckCircle2 size={32} /> : <Info size={32} />}
-          </div>
-          <h3 className="text-xl font-black text-slate-800 mb-2">{title}</h3>
-          <p className="text-slate-500 text-sm leading-relaxed">{message}</p>
-        </div>
-        <div className="p-4 bg-slate-50 flex gap-3">
-          {onCancel && (
-            <button onClick={onCancel} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-200 rounded-2xl transition">
-              Cancelar
-            </button>
-          )}
-          <button onClick={onConfirm} className={`flex-1 py-3 font-bold text-white rounded-2xl shadow-lg transition active:scale-95 ${type === 'confirm' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-            Confirmar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+// --- UTILIDAD: Formato de Fecha Chileno ---
+const formatearFechaChile = (fechaStr) => {
+  if (!fechaStr) return '--/--/----';
+  const [year, month, day] = fechaStr.split('-');
+  return `${day}-${month}-${year}`;
 };
 
 function ContenedorPedidos() {
-  const { nombreEmpresa } = useParams();
   const [clientesAgrupados, setClientesAgrupados] = useState([]);
   const [expandido, setExpandido] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'confirm' });
+  
+  // Estados para la verificación por foto
+  const [pedidoEnProceso, setPedidoEnProceso] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const [subiendo, setSubiendo] = useState(false);
 
   useEffect(() => {
-    if (nombreEmpresa) fetchPedidos();
-  }, [nombreEmpresa]);
-
-  const abrirModal = (title, message, onConfirm, type = 'confirm') => {
-    setModal({ isOpen: true, title, message, onConfirm, type });
-  };
+    fetchPedidos();
+  }, []);
 
   async function fetchPedidos() {
     setCargando(true);
-    const empresaLimpia = decodeURIComponent(nombreEmpresa).trim();
-    
-    // Consulta Master-Detail para el proyecto de Analista Programador
+    // Ahora cargamos todos los pedidos que NO han sido entregados
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
-      .ilike('empresa', empresaLimpia)
+      .eq('estado_entregado', false)
       .order('fecha', { ascending: false });
 
     if (!error) {
@@ -90,59 +68,156 @@ function ContenedorPedidos() {
     setCargando(false);
   }
 
-  async function confirmarEntregaFolio(id, folio) {
-    abrirModal(
-      "Entregar Folio",
-      `¿Confirmar la entrega del folio #${folio}?`,
-      async () => {
-        const { error } = await supabase.from('pedidos').delete().eq('id', id);
-        if (!error) {
-          fetchPedidos();
-          setModal({ ...modal, isOpen: false });
-        }
-      }
-    );
+  async function subirFoto(archivoBase64, folio) {
+    try {
+      // Convertir Base64 a Blob (el formato que requiere el Storage)
+      const base64Data = archivoBase64.split(',')[1];
+      const blob = await fetch(`data:image/jpeg;base64,${base64Data}`).then(res => res.blob());
+      
+      const nombreArchivo = `entrega_${folio}_${Date.now()}.jpg`;
+      const rutaArchivo = `public/${nombreArchivo}`;
+
+      // Subir al bucket 'evidencias'
+      const { data, error } = await supabase.storage
+        .from('evidencias')
+        .upload(rutaArchivo, blob, { contentType: 'image/jpeg' });
+
+      if (error) throw error;
+
+      // Obtener la URL pública para guardarla en la base de datos
+      const { data: urlData } = supabase.storage
+        .from('evidencias')
+        .getPublicUrl(rutaArchivo);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error("Error al subir foto:", err.message);
+      return null;
+    }
   }
 
-  async function confirmarTodoElCliente(pedidosCliente) {
-    const ids = pedidosCliente.map(p => p.id);
-    abrirModal(
-      "Entrega Total",
-      `¿Confirmar los ${ids.length} pedidos de este cliente?`,
-      async () => {
-        const { error } = await supabase.from('pedidos').delete().in('id', ids);
-        if (!error) {
-          setExpandido(null);
-          fetchPedidos();
-          setModal({ ...modal, isOpen: false });
-        }
-      }
+  // --- LÓGICA DE CÁMARA ---
+  const iniciarCaptura = (pedido) => {
+    setPedidoEnProceso(pedido);
+    fileInputRef.current.click(); // Dispara el selector de archivos (cámara en móvil)
+  };
+
+  const manejarFoto = (e) => {
+    const archivo = e.target.files[0];
+    if (archivo) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFotoPreview(reader.result);
+      };
+      reader.readAsDataURL(archivo);
+    }
+  };
+
+  const cancelarCaptura = () => {
+    setFotoPreview(null);
+    setPedidoEnProceso(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confirmarEntregaFinal = async () => {
+    if (!pedidoEnProceso || !fotoPreview) return;
+    
+    setSubiendo(true);
+
+    // 1. Subir la imagen primero
+    const urlFoto = await subirFoto(fotoPreview, pedidoEnProceso.folio);
+
+    if (!urlFoto) {
+      alert("Error al subir la evidencia. Intente nuevamente.");
+      setSubiendo(false);
+      return;
+    }
+
+    // 2. Actualizar el pedido en la base de datos (puedes añadir una columna 'url_foto')
+    const { error } = await supabase
+      .from('pedidos')
+      .update({ 
+        estado_entregado: true,
+        // url_foto: urlFoto // Opcional: crea esta columna en Supabase si quieres guardar el link
+      })
+      .eq('id', pedidoEnProceso.id);
+
+    if (!error) {
+      alert(`Folio #${pedidoEnProceso.folio} entregado y evidencia guardada.`);
+      cancelarCaptura();
+      fetchPedidos();
+    } else {
+      alert("Error al actualizar estado: " + error.message);
+    }
+    setSubiendo(false);
+  };
+
+  if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600">CARGANDO HOJA DE RUTA...</div>;
+
+  // --- VISTA DE PREVISUALIZACIÓN DE FOTO ---
+  if (fotoPreview) {
+    return (
+      <div className="fixed inset-0 z-[200] bg-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+          <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+            <ImageIcon className="text-indigo-600" />
+            <h3 className="font-black text-slate-800 uppercase tracking-tighter">Verificación de Entrega</h3>
+          </div>
+          
+          <div className="aspect-square w-full bg-slate-200">
+            <img src={fotoPreview} alt="Entrega" className="w-full h-full object-cover" />
+          </div>
+
+          <div className="p-8 text-center">
+            <p className="text-slate-500 text-sm font-bold mb-1 uppercase tracking-widest">Pedido</p>
+            <h4 className="text-2xl font-black text-slate-800 mb-6">Folio #{pedidoEnProceso?.folio}</h4>
+            
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={confirmarEntregaFinal}
+                className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition uppercase tracking-widest"
+              >
+                <CheckCircle size={24} /> Confirmar Entrega
+              </button>
+              <button 
+                onClick={cancelarCaptura}
+                className="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black flex items-center justify-center gap-3 active:scale-95 transition uppercase tracking-widest text-xs"
+              >
+                <ArrowLeft size={18} /> Tomar otra foto
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
-
-  const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
-
-  if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600">SINCRONIZANDO RUTA...</div>;
 
   return (
     <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
-      <CustomModal {...modal} onCancel={() => setModal({ ...modal, isOpen: false })} />
+      {/* Input oculto para cámara */}
+      <input 
+        type="file" 
+        accept="image/*" 
+        capture="environment" 
+        ref={fileInputRef} 
+        className="hidden" 
+        onChange={manejarFoto}
+      />
 
-      <div className="w-full px-2 py-6 sm:px-4 md:px-10"> 
+      <div className="w-full px-2 py-6 sm:px-4 md:px-10 lg:px-16"> 
         <header className="w-full mb-8 border-b-2 border-slate-200 pb-6">
           <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
             <Package className="text-indigo-600" size={32} /> Hoja de Ruta
           </h1>
-          <p className="text-slate-500 font-bold italic text-sm">{decodeURIComponent(nombreEmpresa)}</p>
+          <p className="text-slate-500 font-bold italic text-sm">Carga automática de terminal</p>
         </header>
 
         <main className="w-full space-y-6 pb-20">
           {clientesAgrupados.map((cliente) => {
             const estaAbierto = expandido === cliente.idUnico;
             return (
-              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl transition-all border-4 ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
+              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 
-                {/* CABECERA PADRE: Ocupa el 100% sin márgenes laterales internos excesivos */}
                 <div 
                   className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900"
                   onClick={() => setExpandido(estaAbierto ? null : cliente.idUnico)}
@@ -158,7 +233,7 @@ function ContenedorPedidos() {
                     )}
                   </div>
                   
-                  <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-2 uppercase leading-none italic break-words">{cliente.nombre}</h2>
+                  <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-2 uppercase italic leading-tight break-words">{cliente.nombre}</h2>
                   
                   <div className="flex items-start gap-2 text-slate-500 mb-8">
                     <MapPin size={22} className="text-indigo-500 shrink-0" />
@@ -168,7 +243,7 @@ function ContenedorPedidos() {
                   <div className="flex justify-between items-end pt-6 border-t border-slate-100">
                     <div className="flex-1">
                       {estaAbierto ? (
-                        <div className="animate-in fade-in slide-in-from-left-2">
+                        <div>
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total de la Carga</p>
                           <p className="text-4xl font-black text-emerald-600">${cliente.totalGeneral.toLocaleString('es-CL')}</p>
                         </div>
@@ -185,20 +260,22 @@ function ContenedorPedidos() {
                   </div>
                 </div>
 
-                {/* DETALLE HIJO: Ocupa el 100% del contenedor padre */}
                 {estaAbierto && (
-                  <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in duration-300">
+                  <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
                         return (
                           <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
-                            {/* CABECERA HIJA: Solo color (Naranja=Factura, Azul=Boleta) para ahorrar espacio */}
                             <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}>
                               <span className="text-xs font-black tracking-widest uppercase"># {p.folio}</span>
                               <div className="flex gap-2 text-[10px] font-bold">
-                                <span className="flex items-center gap-1"><Calendar size={12}/> {p.fecha_entrega}</span>
-                                <span className="flex items-center gap-1"><Clock size={12}/> {p.hora_entrega}</span>
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={12}/> {formatearFechaChile(p.fecha_entrega)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock size={12}/> {p.hora_entrega}
+                                </span>
                               </div>
                             </div>
 
@@ -222,8 +299,11 @@ function ContenedorPedidos() {
 
                             <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
                               <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                              <button onClick={() => confirmarEntregaFolio(p.id, p.folio)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 transition">
-                                <CheckCircle size={24}/>
+                              <button 
+                                onClick={() => iniciarCaptura(p)}
+                                className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 transition"
+                              >
+                                <Camera size={24}/>
                               </button>
                             </div>
                           </div>
@@ -232,22 +312,10 @@ function ContenedorPedidos() {
                     </div>
 
                     <div className="flex flex-col gap-4 w-full">
-                      <a 
-  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`}
-  target="_blank" 
-  rel="noreferrer"
-  className="bg-slate-800 text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl hover:bg-slate-900 transition uppercase tracking-widest text-sm"
->
-  <Navigation size={22}/> Ir al Destino
-</a>
-                      
-                      {cliente.pedidos.length > 1 && (
-                        <button onClick={() => confirmarTodoElCliente(cliente.pedidos)} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-emerald-700 transition">
-                          <CheckCircle size={26}/> Confirmar Todo
-                        </button>
-                      )}
-
-                      <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs hover:bg-slate-300 transition">
+                      <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg">
+                        <Navigation size={26}/> Iniciar GPS
+                      </a>
+                      <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
                         <XCircle size={20}/> Cerrar Detalles
                       </button>
                     </div>
@@ -265,8 +333,10 @@ function ContenedorPedidos() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/:nombreEmpresa" element={<ContenedorPedidos />} />
-      <Route path="/" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl">DELIVERY</div>} />
+      <Route path="/" element={<ContenedorPedidos />} />
+      <Route path="*" element={<div className="h-screen w-full flex items-center justify-center font-black text-slate-300 text-5xl italic uppercase tracking-tighter">POS DELIVERY</div>} />
     </Routes>
   );
 }
+
+const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
