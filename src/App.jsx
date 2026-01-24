@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Routes, Route } from 'react-router-dom';
+import { MapContainer, TileLayer, Marker, useMap, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet-routing-machine';
+import 'leaflet-control-geocoder';
+
 import { 
   MapPin, Clock, Navigation, CheckCircle, 
   ChevronDown, ChevronUp, Package, UserCheck, 
@@ -13,25 +18,73 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-// --- 1. UTILIDADES ---
+// --- 1. CONFIGURACIÓN DE ICONOS ---
+const iconoRepartidor = new L.Icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+    iconSize: [38, 38],
+    iconAnchor: [19, 38],
+    popupAnchor: [0, -38]
+});
+
+const iconoCliente = new L.Icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/447/447031.png',
+    iconSize: [35, 35],
+    iconAnchor: [17, 35]
+});
+
+// --- 2. UTILIDADES ---
 const formatearFechaChile = (fechaStr) => {
   if (!fechaStr) return '--/--/----';
   const [year, month, day] = fechaStr.split('-');
   return `${day}-${month}-${year}`;
 };
 
-const calcularDistancia = (lat1, lon1, lat2, lon2) => {
-  const R = 6371e3; 
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-};
+// --- 3. SUB-COMPONENTE: MOTOR DE RUTAS Y CENTRADO ---
+function RoutingEngine({ origen, direccionDestino }) {
+  const map = useMap();
+  const routingRef = useRef(null);
 
-const esTelefonoValido = (num) => num && num.replace(/\s/g, '').length >= 8;
+  useEffect(() => {
+    if (!map || !origen || !direccionDestino) return;
 
+    // Forzar recalculo de tamaño para evitar cuadros grises
+    setTimeout(() => { map.invalidateSize(); }, 200);
+
+    if (routingRef.current) map.removeControl(routingRef.current);
+
+    // Buscador de direcciones (Geocoder)
+    const geocoder = L.Control.Geocoder.nominatim();
+
+    geocoder.geocode(direccionDestino, (results) => {
+      if (results && results.length > 0) {
+        const dest = results[0].center;
+
+        routingRef.current = L.Routing.control({
+          waypoints: [
+            L.latLng(origen.lat, origen.lng),
+            L.latLng(dest.lat, dest.lng)
+          ],
+          router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+          lineOptions: { styles: [{ color: '#6366f1', weight: 6, opacity: 0.8 }] },
+          addWaypoints: false,
+          draggableWaypoints: false,
+          fitSelectedRoutes: false,
+          show: false, // Oculta panel de instrucciones
+          createMarker: () => null // Usamos nuestros propios Marker components
+        }).addTo(map);
+
+        // Centrado dinámico sobre el usuario
+        map.setView([origen.lat, origen.lng], 17);
+      }
+    });
+
+    return () => { if (routingRef.current) map.removeControl(routingRef.current); };
+  }, [origen, direccionDestino, map]);
+
+  return null;
+}
+
+// --- 4. COMPONENTE PRINCIPAL ---
 function ContenedorPedidos() {
   const [clientesAgrupados, setClientesAgrupados] = useState([]);
   const [expandido, setExpandido] = useState(null);
@@ -45,7 +98,6 @@ function ContenedorPedidos() {
   
   const fileInputRef = useRef(null);
   const watchId = useRef(null);
-  const ultimaPosicionRef = useRef(null);
 
   useEffect(() => {
     fetchPedidos();
@@ -68,55 +120,37 @@ function ContenedorPedidos() {
           acc[clienteID] = {
             idUnico: clienteID, nombre: current.nombre_cliente, rut: current.rut_cliente,
             direccion: current.direccion_cliente, telefono: current.telefono,
-            totalGeneral: 0, pedidos: [],
-            prioridad: new Date(`${current.fecha_entrega}T${current.hora_entrega || '00:00'}`)
+            totalGeneral: 0, pedidos: []
           };
         }
         acc[clienteID].pedidos.push(current);
         acc[clienteID].totalGeneral += Number(current.total_pedido);
         return acc;
       }, {});
-      setClientesAgrupados(Object.values(agrupados).sort((a, b) => a.prioridad - b.prioridad));
+      setClientesAgrupados(Object.values(agrupados));
     }
     setCargando(false);
   }
 
-  // --- LÓGICA DE GPS: ALTA PRECISIÓN ---
   const iniciarNavegacion = (clienteId) => {
     if (!navigator.geolocation) return alert("GPS no disponible");
-    
-    navigator.geolocation.getCurrentPosition(
+    setVerMapa(clienteId);
+    setMapaFullscreen(true); 
+
+    watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setPosicionActual(coords);
-        setVerMapa(clienteId);
-        setMapaFullscreen(true);
-        
-        if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
-        watchId.current = navigator.geolocation.watchPosition(
-          (watchPos) => {
-            const { latitude, longitude } = watchPos.coords;
-            if (!ultimaPosicionRef.current || calcularDistancia(ultimaPosicionRef.current.lat, ultimaPosicionRef.current.lng, latitude, longitude) > 10) {
-              ultimaPosicionRef.current = { lat: latitude, lng: longitude };
-              setPosicionActual({ lat: latitude, lng: longitude });
-            }
-          },
-          null,
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+        setPosicionActual({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      (err) => alert("Error: Activa el GPS y acepta los permisos de ubicación."),
-      { enableHighAccuracy: true }
+      (err) => alert("Activa el GPS."),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
   const detenerNavegacion = () => {
     if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
     setVerMapa(null); setMapaFullscreen(false); setPosicionActual(null);
-    ultimaPosicionRef.current = null;
   };
 
-  // --- LÓGICA DE CÁMARA ---
   const iniciarCaptura = (pedido) => {
     setPedidoEnProceso(pedido);
     if (fileInputRef.current) fileInputRef.current.value = ""; 
@@ -142,51 +176,34 @@ function ContenedorPedidos() {
       const { data: urlData } = supabase.storage.from('evidencias').getPublicUrl(`public/${nombre}`);
       await supabase.from('pedidos').update({ estado_entregado: true, url_foto: urlData.publicUrl }).eq('id', pedidoEnProceso.id);
       setFotoPreview(null); setPedidoEnProceso(null); fetchPedidos();
-    } catch (e) { alert("Error al guardar entrega."); }
+    } catch (e) { alert("Error al subir."); }
     setSubiendo(false);
   };
 
-  // --- RENDER: MAPA FULLSCREEN ---
+  // --- RENDER: MAPA LEAFLET ---
   if (mapaFullscreen && posicionActual) {
     const clienteActivo = clientesAgrupados.find(c => c.idUnico === verMapa);
-    
-    /**
-     * TRUCO DE CENTRADO: 
-     * 1. saddr: Tu ubicación actual (Inicio)
-     * 2. ll: Fuerza a la cámara a centrarse en TI, no en la mitad de la ruta.
-     * 3. z=19: Zoom de máxima proximidad.
-     */
-    const urlGoogle = `https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(clienteActivo.direccion)}&ll=${posicionActual.lat},${posicionActual.lng}&z=19&t=m&output=embed&iwloc=near`;
-
     return (
-      <div className="fixed inset-0 z-[500] bg-black flex flex-col overflow-hidden animate-in fade-in duration-300">
-        {/* Header Flotante */}
-        <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2 items-center">
-          <button onClick={detenerNavegacion} className="bg-white/95 p-4 rounded-2xl shadow-2xl text-red-500 border border-slate-100 active:scale-90 transition"><XCircle size={26} /></button>
-          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-200">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 text-center font-bold">Navegación GPS</p>
-            <p className="text-xs font-black text-slate-800 truncate uppercase italic text-center leading-none">{clienteActivo?.nombre}</p>
+      <div className="fixed inset-0 z-[500] bg-white flex flex-col overflow-hidden animate-in fade-in">
+        <div className="absolute top-6 left-4 right-4 z-[510] flex gap-2">
+          <button onClick={detenerNavegacion} className="bg-white p-4 rounded-2xl shadow-2xl text-red-500 active:scale-90 transition border border-slate-100"><XCircle size={26} /></button>
+          <div className="flex-1 bg-white/95 backdrop-blur px-5 py-3 rounded-2xl shadow-2xl border border-slate-100 flex flex-col justify-center">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">En camino a</p>
+            <p className="text-xs font-black text-slate-800 truncate uppercase italic">{clienteActivo?.nombre}</p>
           </div>
         </div>
-        
-        {/* RECORTE CSS: Oculta el buscador y botones de Google Maps arriba a la izquierda */}
-        <div className="flex-1 w-full relative overflow-hidden bg-slate-200">
-           <iframe 
-             className="absolute border-none"
-             style={{ 
-               top: '-75px', // "Corta" el cuadro de búsqueda
-               left: '-10px', 
-               width: 'calc(100% + 20px)', 
-               height: 'calc(100% + 150px)' 
-             }}
-             src={urlGoogle} 
-             allowFullScreen
-           ></iframe>
-        </div>
+
+        <MapContainer center={[posicionActual.lat, posicionActual.lng]} zoom={17} zoomControl={false} style={{ height: '100%', width: '100%' }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+          <Marker position={[posicionActual.lat, posicionActual.lng]} icon={iconoRepartidor}>
+            <Popup><span className="font-bold uppercase text-[10px]">Tu Ubicación</span></Popup>
+          </Marker>
+          <RoutingEngine origen={posicionActual} direccionDestino={clienteActivo.direccion} />
+        </MapContainer>
 
         <div className="absolute bottom-8 left-8 right-8 z-[510]">
-          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900/95 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-2xl flex items-center justify-center gap-3 border border-white/10 active:scale-95 transition tracking-widest">
-            <Minimize2 size={18} /> Volver a Pedidos
+          <button onClick={() => setMapaFullscreen(false)} className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-2xl flex items-center justify-center gap-3">
+            <Minimize2 size={18} /> Salir de navegación
           </button>
         </div>
       </div>
@@ -197,14 +214,14 @@ function ContenedorPedidos() {
   if (fotoPreview) {
     return (
       <div className="fixed inset-0 z-[250] bg-slate-900 flex items-center justify-center p-2">
-        <div className="w-full max-w-sm bg-white rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
-          <div className="p-4 border-b flex items-center justify-between bg-white"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest"><Camera size={18} /> Validar Entrega</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
-          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" alt="Evidencia" /></div>
+        <div className="w-full max-w-sm bg-white rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[98vh]">
+          <div className="p-4 border-b flex items-center justify-between"><div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase"><Camera size={18} /> Validar</div><XCircle onClick={() => setFotoPreview(null)} className="text-slate-300 cursor-pointer" size={24} /></div>
+          <div className="bg-black flex-shrink-0 h-[28vh] flex items-center justify-center overflow-hidden"><img src={fotoPreview} className="h-full w-full object-contain" /></div>
           <div className="p-6 flex-1 flex flex-col justify-between text-center">
             <h4 className="text-2xl font-black text-slate-800 italic uppercase leading-none mb-6">Folio #{pedidoEnProceso?.folio}</h4>
             <div className="flex flex-col gap-3">
               <button disabled={subiendo} onClick={confirmarEntregaFinal} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black text-base shadow-xl active:scale-95 transition-all uppercase">{subiendo ? "Subiendo..." : "Confirmar Entrega"}</button>
-              <button onClick={() => { setFotoPreview(null); setTimeout(() => fileInputRef.current.click(), 150); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase border border-indigo-50 italic">Repetir Foto</button>
+              <button onClick={() => { setFotoPreview(null); fileInputRef.current.click(); }} className="w-full bg-slate-100 text-indigo-700 py-3 rounded-2xl font-black text-xs uppercase italic border border-indigo-50 font-black">Repetir Foto</button>
               <button onClick={() => { setFotoPreview(null); setPedidoEnProceso(null); }} className="w-full bg-white text-slate-400 py-2 rounded-2xl font-bold text-[10px] uppercase">Cancelar</button>
             </div>
           </div>
@@ -227,11 +244,11 @@ function ContenedorPedidos() {
             return (
               <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 <div className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900" onClick={() => { setExpandido(estaAbierto ? null : cliente.idUnico); detenerNavegacion(); }}>
-                   <div className="flex justify-between items-start mb-4"><span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Punto de Entrega</span>{esTelefonoValido(cliente.telefono) && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}</div>
-                   <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase leading-none break-words italic tracking-tighter">{cliente.nombre}</h2>
+                   <div className="flex justify-between items-start mb-4"><span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Punto de Entrega</span>{cliente.telefono && <a href={`tel:${cliente.telefono}`} onClick={(e) => e.stopPropagation()} className="bg-indigo-600 text-white p-3 rounded-full shadow-lg"><Phone size={20} /></a>}</div>
+                   <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase italic leading-none break-words tracking-tighter">{cliente.nombre}</h2>
                    <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={22} className="text-indigo-500 shrink-0" /><p className="text-base md:text-lg leading-tight break-words italic uppercase">{cliente.direccion}</p></div>
                    <div className="flex justify-between items-end pt-6 border-t border-slate-100">
-                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Carga Total' : 'Pendientes'}</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length + ' Pedidos'}</p></div>
+                    <div className="flex-1"><p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estaAbierto ? 'Total Acumulado' : 'Pedidos'}</p><p className="text-4xl font-black text-slate-800 tracking-tighter">{estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length}</p></div>
                     <div className="text-indigo-600 bg-indigo-50 p-3 rounded-full">{estaAbierto ? <ChevronUp size={32}/> : <ChevronDown size={32}/>}</div>
                   </div>
                 </div>
@@ -242,7 +259,7 @@ function ContenedorPedidos() {
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
                         return (
-                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-md">
+                          <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
                             <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}><span className="text-xs font-black uppercase tracking-widest"># {p.folio}</span><div className="flex gap-2 text-[9px] font-bold"><span>{formatearFechaChile(p.fecha_entrega)}</span><span>{p.hora_entrega}</span></div></div>
                             <div className="p-6 flex-1">
                               {esFactura && <div className="mb-4 text-orange-600 font-black text-[10px] border-b pb-1 uppercase italic">RUT: {p.rut_cliente}</div>}
@@ -254,7 +271,7 @@ function ContenedorPedidos() {
                       })}
                     </div>
                     <div className="flex flex-col gap-6 w-full">
-                      <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition-all"><Navigation2 size={28}/> Iniciar GPS (Modo Inmersivo)</button>
+                      <button onClick={() => iniciarNavegacion(cliente.idUnico)} className="bg-slate-800 text-white py-6 rounded-[2rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg active:scale-95 transition-all"><Navigation2 size={28}/> Iniciar GPS (Leaflet Map)</button>
                       <button onClick={() => { setExpandido(null); detenerNavegacion(); }} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs"><XCircle size={20}/> Cerrar Detalles</button>
                     </div>
                   </div>
