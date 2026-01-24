@@ -41,35 +41,51 @@ function MotorLogistico({ origen, direccionDestino }) {
   useEffect(() => {
     if (!map || !origen || !direccionDestino) return;
 
-    // Forzar renderizado para evitar cuadros grises
-    setTimeout(() => { map.invalidateSize(); }, 400);
-
-    const geocoder = L.Control.Geocoder.nominatim();
-    // Forzamos búsqueda en Coquimbo, Chile
-    const queryCompleta = `${direccionDestino.replace('#', '')} Chile`;
-    console.log(queryCompleta);
-    
-    geocoder.geocode(queryCompleta, (results) => {
-      if (results && results.length > 0) {
-        const dest = results[0].center;
-        setCoordsDestino(dest);
-console.log(results);
-        if (routingRef.current) map.removeControl(routingRef.current);
+    const buscarDireccion = async () => {
+      try {
+        // Limpiamos la dirección de símbolos molestos
+        const limpia = direccionDestino.replace(/[#]/g, '');
+        const query = encodeURIComponent(`${limpia}, Coquimbo, Chile`);
         
-        routingRef.current = L.Routing.control({
-          waypoints: [L.latLng(origen.lat, origen.lng), L.latLng(dest.lat, dest.lng)],
-          router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-          lineOptions: { styles: [{ color: '#6366f1', weight: 8, opacity: 0.9 }] },
-          addWaypoints: false, 
-          draggableWaypoints: false,
-          fitSelectedRoutes: false, 
-          show: false, 
-          createMarker: () => null
-        }).addTo(map);
-      }
-    });
+        // Llamada directa a Nominatim (lo que confirmaste que funciona)
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`);
+        const data = await response.json();
 
-    map.setView([origen.lat, origen.lng], 17);
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          const dest = { lat, lng: lon };
+          
+          setCoordsDestino(dest);
+
+          // Dibujar Ruta
+          if (routingRef.current) map.removeControl(routingRef.current);
+          
+          routingRef.current = L.Routing.control({
+            waypoints: [
+              L.latLng(origen.lat, origen.lng),
+              L.latLng(dest.lat, dest.lng)
+            ],
+            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+            lineOptions: { styles: [{ color: '#4f46e5', weight: 7, opacity: 0.8 }] },
+            addWaypoints: false,
+            draggableWaypoints: false,
+            fitSelectedRoutes: false,
+            show: false,
+            createMarker: () => null
+          }).addTo(map);
+
+          // Forzar el centrado en el usuario
+          map.setView([origen.lat, origen.lng], 17);
+        }
+      } catch (error) {
+        console.error("Error en geolocalización manual:", error);
+      }
+    };
+
+    buscarDireccion();
+    setTimeout(() => { map.invalidateSize(); }, 500);
+
     return () => { if (routingRef.current) map.removeControl(routingRef.current); };
   }, [origen, direccionDestino, map]);
 
