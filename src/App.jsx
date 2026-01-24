@@ -253,6 +253,7 @@ if (fotoPreview) {
 
 return (
   <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
+    {/* Input oculto para activar la cámara del móvil */}
     <input 
       type="file" 
       accept="image/*" 
@@ -267,7 +268,7 @@ return (
         <h1 className="text-2xl md:text-4xl font-black text-slate-800 flex items-center gap-3 uppercase tracking-tighter">
           <Package className="text-indigo-600" size={32} /> Hoja de Ruta
         </h1>
-        <p className="text-slate-500 font-bold italic text-sm">Navegación en tiempo real</p>
+        <p className="text-slate-500 font-bold italic text-sm text-balance">Navegación en tiempo real para despachos</p>
       </header>
 
       <main className="w-full space-y-6 pb-20">
@@ -278,7 +279,7 @@ return (
           return (
             <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
               
-              {/* CABECERA PADRE */}
+              {/* CABECERA PADRE: DATOS DEL CLIENTE */}
               <div 
                 className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900"
                 onClick={() => {
@@ -309,7 +310,7 @@ return (
                 <div className="flex justify-between items-end pt-6 border-t border-slate-100 gap-4">
                   <div className="flex-1">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                      {estaAbierto ? 'Total Carga' : 'Pedidos Pendientes'}
+                      {estaAbierto ? 'Total Carga Cliente' : 'Pedidos Pendientes'}
                     </p>
                     <p className="text-4xl font-black text-slate-800">
                       {estaAbierto ? `$${cliente.totalGeneral.toLocaleString('es-CL')}` : cliente.pedidos.length}
@@ -321,11 +322,11 @@ return (
                 </div>
               </div>
 
-              {/* DETALLE EXPANDIDO */}
+              {/* DETALLE EXPANDIDO: MAPA Y PEDIDOS HIJOS */}
               {estaAbierto && (
                 <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in duration-300">
                   
-                  {/* MAPA CON RUTA (IFRAME) */}
+                  {/* VISOR DE MAPA CON RUTA */}
                   {mapaActivo && posicionActual && (
                     <div className="w-full h-96 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl animate-in zoom-in-95">
                       <iframe
@@ -333,19 +334,19 @@ return (
                         height="100%"
                         frameBorder="0"
                         style={{ border: 0 }}
-                        /* URL con Origen (GPS Usuario) y Destino (Cliente) para mostrar la línea azul */
-                        src={`https://maps.google.com/maps?saddr=${posicionActual.lat},${posicionActual.lng}&daddr=${encodeURIComponent(cliente.direccion)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                        src={`https://www.google.com/maps/embed/v1/directions?key=TU_API_KEY&origin=${posicionActual.lat},${posicionActual.lng}&destination=${encodeURIComponent(cliente.direccion)}&mode=driving`}
                         allowFullScreen
                       ></iframe>
                     </div>
                   )}
 
-                  {/* GRID DE PEDIDOS HIJOS */}
+                  {/* GRID DE PEDIDOS HIJOS (TARJETAS INDIVIDUALES) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                     {cliente.pedidos.map((p) => {
                       const esFactura = !!p.rut_cliente;
                       return (
-                        <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
+                        <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-md">
+                          {/* Cabecera del pedido: Folio y Fecha */}
                           <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}>
                             <span className="text-xs font-black tracking-widest uppercase"># {p.folio}</span>
                             <div className="flex gap-2 text-[10px] font-bold">
@@ -353,23 +354,47 @@ return (
                               <span>{p.hora_entrega}</span>
                             </div>
                           </div>
+
+                          {/* Cuerpo del pedido: Lista de Productos */}
                           <div className="p-6 flex-1">
-                            {/* ... detalles del pedido ... */}
-                            <div className="p-4 bg-slate-50 border-t flex justify-between items-center">
-                                <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
-                                <button onClick={() => iniciarCaptura(p)} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg hover:scale-105 transition">
-                                    <Camera size={24}/>
-                                </button>
+                            {esFactura && <div className="mb-4 text-orange-600 font-black text-[10px] border-b pb-1 uppercase italic">RUT: {p.rut_cliente}</div>}
+                            
+                            <div className="space-y-2 mb-4">
+                              {/* Aquí se cargan los productos del pedido */}
+                              {p.detalles_pedido?.map((det, idx) => (
+                                <div key={idx} className="flex justify-between text-xs text-slate-600 border-b border-slate-50 pb-1">
+                                  <span className="font-bold uppercase truncate pr-4">{det.descripcion}</span>
+                                  <span className="font-black shrink-0">x{det.cantidad}</span>
+                                </div>
+                              ))}
                             </div>
+
+                            {/* Información de quién recibe */}
+                            {p.quien_recibe && p.quien_recibe.trim() !== "" && (
+                              <div className="mt-4 flex items-center gap-2 text-indigo-600 bg-indigo-50 p-3 rounded-xl">
+                                <UserCheck size={16} />
+                                <p className="text-[10px] font-black uppercase truncate italic">Recibe: {p.quien_recibe}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Pie del pedido: Total y botón de Cámara */}
+                          <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
+                            <span className="text-2xl font-black text-emerald-600">${Number(p.total_pedido).toLocaleString('es-CL')}</span>
+                            <button 
+                              onClick={() => iniciarCaptura(p)} 
+                              className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg active:scale-90 transition hover:bg-emerald-600"
+                            >
+                              <Camera size={24}/>
+                            </button>
                           </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* ACCIONES DE NAVEGACIÓN */}
+                  {/* ACCIONES DE NAVEGACIÓN Y CIERRE */}
                   <div className="flex flex-col gap-6 w-full">
-                    {/* Botón Iniciar GPS: Ahora carga la ruta en la misma página */}
                     <button 
                       onClick={() => activarNavegacion(cliente.idUnico)}
                       className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-slate-900 transition"
@@ -377,7 +402,6 @@ return (
                       <Navigation size={26}/> {mapaActivo ? "Actualizar Ruta GPS" : "Iniciar GPS (Ver Ruta)"}
                     </button>
                     
-                    {/* Mantenemos el enlace externo por si el repartidor prefiere la App nativa con voz */}
                     <a 
                       href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`}
                       target="_blank" rel="noreferrer"
@@ -387,12 +411,18 @@ return (
                     </a>
 
                     {cliente.pedidos.length > 1 && (
-                      <button onClick={() => iniciarCaptura(cliente.pedidos[0])} className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg">
+                      <button 
+                        onClick={() => iniciarCaptura(cliente.pedidos[0])} 
+                        className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg hover:bg-emerald-700 transition"
+                      >
                         <CheckCircle size={26}/> Confirmar Entrega Total
                       </button>
                     )}
 
-                    <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
+                    <button 
+                      onClick={() => setExpandido(null)} 
+                      className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs hover:bg-slate-300 transition"
+                    >
                       <XCircle size={20}/> Cerrar Detalles
                     </button>
                   </div>
