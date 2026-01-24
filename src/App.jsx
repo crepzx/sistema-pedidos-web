@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Routes, Route } from 'react-router-dom';
+import { Map as MapIcon, Globe } from 'lucide-react';
 import { 
   MapPin, Clock, Navigation, CheckCircle, 
   ChevronDown, ChevronUp, Package, UserCheck, 
@@ -24,7 +25,8 @@ function ContenedorPedidos() {
   const [clientesAgrupados, setClientesAgrupados] = useState([]);
   const [expandido, setExpandido] = useState(null);
   const [cargando, setCargando] = useState(true);
-  
+  const [verMapa, setVerMapa] = useState(null);
+
   // Estados para la verificación por foto
   const [pedidoEnProceso, setPedidoEnProceso] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
@@ -38,12 +40,12 @@ function ContenedorPedidos() {
 
   async function fetchPedidos() {
     setCargando(true);
-    // Ahora cargamos todos los pedidos que NO han sido entregados
     const { data, error } = await supabase
       .from('pedidos')
       .select('*, detalles_pedido!pedido_id(*)') 
       .eq('estado_entregado', false)
-      .order('fecha', { ascending: false });
+      .order('fecha', { ascending: true }) // Orden base por fecha
+      .order('hora_entrega', { ascending: true }); // Y luego por hora
 
     if (!error) {
       const agrupados = data.reduce((acc, current) => {
@@ -56,14 +58,19 @@ function ContenedorPedidos() {
             direccion: current.direccion_cliente,
             telefono: current.telefono,
             totalGeneral: 0,
-            pedidos: []
+            pedidos: [],
+            // Guardamos la fecha/hora del primer pedido para ordenar
+            prioridad: new Date(`${current.fecha_entrega}T${current.hora_entrega || '00:00'}`)
           };
         }
         acc[clienteID].pedidos.push(current);
         acc[clienteID].totalGeneral += Number(current.total_pedido);
         return acc;
       }, {});
-      setClientesAgrupados(Object.values(agrupados));
+      
+      // ORDENAR: De la fecha/hora más cercana (menor) a la más lejana (mayor)
+      const listaOrdenada = Object.values(agrupados).sort((a, b) => a.prioridad - b.prioridad);
+      setClientesAgrupados(listaOrdenada);
     }
     setCargando(false);
   }
@@ -228,7 +235,7 @@ if (fotoPreview) {
 
   return (
     <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
-      {/* Input oculto para cámara */}
+      {/* Input oculto para activar la cámara del móvil */}
       <input 
         type="file" 
         accept="image/*" 
@@ -249,12 +256,18 @@ if (fotoPreview) {
         <main className="w-full space-y-6 pb-20">
           {clientesAgrupados.map((cliente) => {
             const estaAbierto = expandido === cliente.idUnico;
+            const mapaActivo = verMapa === cliente.idUnico;
+
             return (
-              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl border-4 transition-all ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
+              <div key={cliente.idUnico} className={`w-full bg-white rounded-[2.5rem] shadow-xl transition-all border-4 ${estaAbierto ? 'border-indigo-500' : 'border-transparent'}`}>
                 
+                {/* CABECERA PADRE: Sin restricción de ancho */}
                 <div 
                   className="p-6 md:p-10 cursor-pointer border-l-[16px] border-slate-900"
-                  onClick={() => setExpandido(estaAbierto ? null : cliente.idUnico)}
+                  onClick={() => {
+                    setExpandido(estaAbierto ? null : cliente.idUnico);
+                    setVerMapa(null); // Resetear mapa al cerrar
+                  }}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">
@@ -267,24 +280,30 @@ if (fotoPreview) {
                     )}
                   </div>
                   
-                  <h2 className="text-3xl md:text-4xl font-black text-slate-800 mb-2 uppercase italic leading-tight break-words">{cliente.nombre}</h2>
+                  <h2 className="text-3xl md:text-5xl font-black text-slate-800 mb-2 uppercase italic leading-none break-words">
+                    {cliente.nombre}
+                  </h2>
                   
-                  <div className="flex items-start gap-2 text-slate-500 mb-8">
+                  <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold">
                     <MapPin size={22} className="text-indigo-500 shrink-0" />
-                    <p className="text-base md:text-lg font-bold leading-tight break-words">{cliente.direccion}</p>
+                    <p className="text-base md:text-lg leading-tight break-words">{cliente.direccion}</p>
                   </div>
 
-                  <div className="flex justify-between items-end pt-6 border-t border-slate-100">
+                  <div className="flex justify-between items-end pt-6 border-t border-slate-100 gap-4">
                     <div className="flex-1">
                       {estaAbierto ? (
-                        <div>
+                        <div className="animate-in fade-in slide-in-from-left-2">
                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total de la Carga</p>
-                          <p className="text-4xl font-black text-emerald-600">${cliente.totalGeneral.toLocaleString('es-CL')}</p>
+                          <p className="text-4xl font-black text-emerald-600">
+                            ${cliente.totalGeneral.toLocaleString('es-CL')}
+                          </p>
                         </div>
                       ) : (
                         <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cantidad de Pedidos</p>
-                          <p className="text-4xl font-black text-slate-800">{cliente.pedidos.length}</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                            Próxima entrega: {cliente.pedidos[0].hora_entrega}
+                          </p>
+                          <p className="text-4xl font-black text-slate-800">{cliente.pedidos.length} Pedidos</p>
                         </div>
                       )}
                     </div>
@@ -294,13 +313,39 @@ if (fotoPreview) {
                   </div>
                 </div>
 
+                {/* DETALLE EXPANDIDO */}
                 {estaAbierto && (
-                  <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in">
+                  <div className="bg-slate-50 p-6 md:p-10 border-t-4 border-slate-100 w-full animate-in fade-in duration-300">
+                    
+                    {/* Botón para ver mapa en la misma página */}
+                    <button 
+                      onClick={() => setVerMapa(mapaActivo ? null : cliente.idUnico)}
+                      className="mb-8 w-full bg-white text-indigo-700 py-4 rounded-2xl font-black flex items-center justify-center gap-3 border-2 border-indigo-100 shadow-sm uppercase text-xs tracking-widest"
+                    >
+                      <Globe size={20} /> {mapaActivo ? "Ocultar Mapa" : "Ver Ubicación"}
+                    </button>
+
+                    {/* MAPA EMBEBIDO (Iframe) */}
+                    {mapaActivo && (
+                      <div className="w-full h-80 mb-10 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-xl animate-in zoom-in-95">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          frameBorder="0"
+                          style={{ border: 0 }}
+                          src={`https://www.google.com/maps/embed/v1/place?key=TU_API_KEY&q=${encodeURIComponent(cliente.direccion)}`}
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    )}
+
+                    {/* GRID DE PEDIDOS (HIJOS) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
                       {cliente.pedidos.map((p) => {
                         const esFactura = !!p.rut_cliente;
                         return (
                           <div key={p.id} className="bg-white rounded-[2rem] shadow-sm border-2 border-slate-200 overflow-hidden flex flex-col">
+                            {/* Cabecera del pedido individual con colores de Boleta/Factura */}
                             <div className={`p-4 text-white flex justify-between items-center ${esFactura ? 'bg-orange-600' : 'bg-blue-600'}`}>
                               <span className="text-xs font-black tracking-widest uppercase"># {p.folio}</span>
                               <div className="flex gap-2 text-[10px] font-bold">
@@ -346,9 +391,24 @@ if (fotoPreview) {
                     </div>
 
                     <div className="flex flex-col gap-4 w-full">
-                      <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`} target="_blank" rel="noreferrer" className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg">
+                      {/* Enlace para navegación GPS externa */}
+                      <a 
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cliente.direccion)}&travelmode=driving`}
+                        target="_blank" rel="noreferrer"
+                        className="bg-slate-800 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg"
+                      >
                         <Navigation size={26}/> Iniciar GPS
                       </a>
+                      
+                      {cliente.pedidos.length > 1 && (
+                        <button 
+                          onClick={() => iniciarCaptura(cliente.pedidos[0])} // Iniciar flujo de foto para entrega total
+                          className="bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black flex items-center justify-center gap-4 shadow-2xl uppercase tracking-widest text-lg"
+                        >
+                          <CheckCircle size={26}/> Confirmar Todo
+                        </button>
+                      )}
+
                       <button onClick={() => setExpandido(null)} className="bg-slate-200 text-slate-600 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 uppercase tracking-widest text-xs">
                         <XCircle size={20}/> Cerrar Detalles
                       </button>
