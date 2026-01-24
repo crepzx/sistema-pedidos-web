@@ -237,7 +237,8 @@ function ContenedorPedidos() {
                         <div className="p-6">
                           <div className="flex items-center gap-2 mb-4">
                             <span className="bg-slate-900 text-white text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest italic">Folio # {p.folio}</span>
-                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12}/>{new Date(p.fecha_entrega).toLocaleDateString('es-CL')}    {p.hora_entrega || 'Pendiente'}</span>
+                            <span className="text-slate-400 text-[10px] font-bold tracking-tighter flex items-center gap-1"><Clock size={12} /><span>{new Date(p.fecha_entrega).toLocaleDateString('es-CL')}</span><span className="text-slate-500">•</span><span>{p.hora_entrega || 'Pendiente'}</span></span>
+
                           </div>
                           
                           <div className="space-y-2">
