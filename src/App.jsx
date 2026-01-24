@@ -154,54 +154,70 @@ function ContenedorPedidos() {
 
   if (cargando) return <div className="flex h-screen w-full items-center justify-center font-black text-indigo-600">CARGANDO HOJA DE RUTA...</div>;
 
-  // --- VISTA DE PREVISUALIZACIÓN DE FOTO ---
-  if (fotoPreview) {
+  // --- VISTA DE PREVISUALIZACIÓN CON DISEÑO ANTIERRORES ---
+if (fotoPreview) {
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-900 overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4">
-      {/* Añadimos min-h-full para asegurar que el fondo oscuro cubra todo al hacer scroll */}
-      <div className="w-full max-w-md bg-white rounded-[2rem] overflow-hidden shadow-2xl my-auto">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+    <div className="fixed inset-0 z-[200] bg-slate-900 overflow-y-auto flex items-start sm:items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-[3rem] overflow-hidden shadow-2xl my-auto border-4 border-white/20">
+        
+        {/* Cabecera Informativa */}
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2">
-            <ImageIcon className="text-indigo-600" size={20} />
-            <h3 className="font-black text-slate-800 text-sm uppercase tracking-tighter">Verificación</h3>
+            <div className="bg-indigo-100 p-2 rounded-xl text-indigo-600">
+              <Camera size={20} />
+            </div>
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-tighter">Evidencia Capturada</h3>
           </div>
-          <button onClick={cancelarCaptura} className="text-slate-400 p-1">
-            <XCircle size={24} />
+          <button onClick={cancelarCaptura} className="text-slate-400 hover:text-red-500 transition">
+            <XCircle size={28} />
           </button>
         </div>
         
-        {/* Ajustamos la imagen para que no ocupe toda la pantalla en móviles */}
-        <div className="w-full bg-slate-200 flex items-center justify-center bg-black">
+        {/* Contenedor de Imagen con altura controlada */}
+        <div className="w-full bg-black flex items-center justify-center border-y-8 border-white">
           <img 
             src={fotoPreview} 
             alt="Evidencia" 
-            className="w-full max-h-[45vh] object-contain" 
+            className="w-full max-h-[40vh] object-contain shadow-inner" 
           />
         </div>
 
-        <div className="p-6 text-center">
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Confirmar Entrega</p>
-          <h4 className="text-xl font-black text-slate-800 mb-6">Folio #{pedidoEnProceso?.folio}</h4>
+        {/* Zona de Acción con Botones Separados */}
+        <div className="p-8 md:p-10">
+          <div className="text-center mb-8">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-1">Confirmación Final</p>
+            <h4 className="text-2xl font-black text-slate-800 italic">Folio #{pedidoEnProceso?.folio}</h4>
+          </div>
           
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-6"> {/* Espaciado evidente de 24px */}
+            
+            {/* BOTÓN PRIMARIO: CONFIRMAR (Grande y Verde) */}
             <button 
               disabled={subiendo}
               onClick={confirmarEntregaFinal}
-              className={`w-full ${subiendo ? 'bg-slate-400' : 'bg-emerald-600'} text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition uppercase tracking-widest`}
+              className={`w-full ${subiendo ? 'bg-slate-300' : 'bg-emerald-600'} text-white py-5 rounded-[1.5rem] font-black text-lg flex items-center justify-center gap-4 shadow-xl shadow-emerald-200 active:scale-95 transition-all uppercase tracking-widest`}
             >
               {subiendo ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
               ) : (
-                <><CheckCircle size={24} /> Confirmar</>
+                <><CheckCircle size={26} /> Confirmar Entrega</>
               )}
             </button>
             
+            {/* Divisor Visual Sutil */}
+            <div className="flex items-center gap-4 px-10">
+                <div className="h-px bg-slate-200 flex-1"></div>
+                <span className="text-[9px] font-black text-slate-300 uppercase">o también</span>
+                <div className="h-px bg-slate-200 flex-1"></div>
+            </div>
+
+            {/* BOTÓN SECUNDARIO: REINTENTAR (Más pequeño y Neutro) */}
             <button 
               disabled={subiendo}
               onClick={cancelarCaptura}
-              className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black flex items-center justify-center gap-3 active:scale-95 transition uppercase tracking-widest text-xs"
+              className="w-full bg-slate-100 text-slate-500 py-4 rounded-[1.2rem] font-black flex items-center justify-center gap-3 active:scale-95 transition-all uppercase tracking-widest text-xs border-2 border-slate-200/50"
             >
-              <ArrowLeft size={18} /> Tomar otra foto
+              <Camera size={18} /> Tomar foto nuevamente
             </button>
           </div>
         </div>
