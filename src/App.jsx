@@ -223,7 +223,7 @@ function ContenedorPedidos() {
                 <div className="flex items-start gap-2 text-slate-500 mb-8 font-bold"><MapPin size={18} className="text-indigo-500 shrink-0 mt-0.5"/><p className="text-sm leading-tight uppercase">{c.direccion}</p></div>
                 <div className="flex justify-between items-end pt-6 border-t border-slate-50">
                   <div><p className="text-[10px] text-slate-400 font-black uppercase mb-1">Monto Total</p><p className="text-3xl font-black text-indigo-600 tracking-tighter">${c.total.toLocaleString('es-CL')}</p></div>
-                  <div className="flex items-center gap-3"><div className="text-right"><p className="text-[10px] font-black text-slate-800 uppercase">{c.pedidos.length} ITEMS</p></div><div className="bg-slate-50 p-2 rounded-full text-slate-300">{isOpen ? <ChevronUp size={28}/> : <ChevronDown size={28}/>}</div></div>
+                  <div className="flex items-center gap-3"><div className="text-right"><p className="text-[10px] font-black text-slate-800 uppercase">{c.pedidos.length} PEDIDO{c.pedidos.length > 1 ? 'S' : ''}</p></div><div className="bg-slate-50 p-2 rounded-full text-slate-300">{isOpen ? <ChevronUp size={28}/> : <ChevronDown size={28}/>}</div></div>
                 </div>
               </div>
 
