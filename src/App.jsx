@@ -156,41 +156,59 @@ function ContenedorPedidos() {
 
   // --- VISTA DE PREVISUALIZACIÓN DE FOTO ---
   if (fotoPreview) {
-    return (
-      <div className="fixed inset-0 z-[200] bg-slate-900 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
-          <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-            <ImageIcon className="text-indigo-600" />
-            <h3 className="font-black text-slate-800 uppercase tracking-tighter">Verificación de Entrega</h3>
+  return (
+    <div className="fixed inset-0 z-[200] bg-slate-900 overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4">
+      {/* Añadimos min-h-full para asegurar que el fondo oscuro cubra todo al hacer scroll */}
+      <div className="w-full max-w-md bg-white rounded-[2rem] overflow-hidden shadow-2xl my-auto">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ImageIcon className="text-indigo-600" size={20} />
+            <h3 className="font-black text-slate-800 text-sm uppercase tracking-tighter">Verificación</h3>
           </div>
-          
-          <div className="aspect-square w-full bg-slate-200">
-            <img src={fotoPreview} alt="Entrega" className="w-full h-full object-cover" />
-          </div>
+          <button onClick={cancelarCaptura} className="text-slate-400 p-1">
+            <XCircle size={24} />
+          </button>
+        </div>
+        
+        {/* Ajustamos la imagen para que no ocupe toda la pantalla en móviles */}
+        <div className="w-full bg-slate-200 flex items-center justify-center bg-black">
+          <img 
+            src={fotoPreview} 
+            alt="Evidencia" 
+            className="w-full max-h-[45vh] object-contain" 
+          />
+        </div>
 
-          <div className="p-8 text-center">
-            <p className="text-slate-500 text-sm font-bold mb-1 uppercase tracking-widest">Pedido</p>
-            <h4 className="text-2xl font-black text-slate-800 mb-6">Folio #{pedidoEnProceso?.folio}</h4>
+        <div className="p-6 text-center">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Confirmar Entrega</p>
+          <h4 className="text-xl font-black text-slate-800 mb-6">Folio #{pedidoEnProceso?.folio}</h4>
+          
+          <div className="flex flex-col gap-3">
+            <button 
+              disabled={subiendo}
+              onClick={confirmarEntregaFinal}
+              className={`w-full ${subiendo ? 'bg-slate-400' : 'bg-emerald-600'} text-white py-4 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition uppercase tracking-widest`}
+            >
+              {subiendo ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <><CheckCircle size={24} /> Confirmar</>
+              )}
+            </button>
             
-            <div className="flex flex-col gap-3">
-              <button 
-                onClick={confirmarEntregaFinal}
-                className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition uppercase tracking-widest"
-              >
-                <CheckCircle size={24} /> Confirmar Entrega
-              </button>
-              <button 
-                onClick={cancelarCaptura}
-                className="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black flex items-center justify-center gap-3 active:scale-95 transition uppercase tracking-widest text-xs"
-              >
-                <ArrowLeft size={18} /> Tomar otra foto
-              </button>
-            </div>
+            <button 
+              disabled={subiendo}
+              onClick={cancelarCaptura}
+              className="w-full bg-slate-100 text-slate-500 py-3 rounded-2xl font-black flex items-center justify-center gap-3 active:scale-95 transition uppercase tracking-widest text-xs"
+            >
+              <ArrowLeft size={18} /> Tomar otra foto
+            </button>
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen w-full bg-slate-100 font-sans text-slate-900 overflow-x-hidden">
